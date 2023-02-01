@@ -1,7 +1,10 @@
 ## Setup
 ###Load packages & plot setup
 
-wd<- setwd("C:/Users/chiny/Desktop/FYP/R")
+# NOTE PLEASE CHANGE DIRECTORY ACCORDINGLY
+# BE AWARE OF WHERE THE CODE AND THE DATA IS STORED
+
+wd<- setwd("C:/Users/chiny/Desktop/FYP/R") 
 
 library(plyr) # data wrangling
 library(dplyr) # data wrangling
@@ -28,13 +31,16 @@ laby_asv_wide <- filter(asv_sample_wide,class == "Labyrinthulomycetes")
 
 # Preparing laby data: abundance within class
 laby_order <- laby_asv_wide %>%
-  group_by(latitude,longitude,order) %>%
-  dplyr::summarise(total_count=n(), # To count the number of occurrence for each order at each location
-            .groups = 'drop')%>%
+  group_by(latitude,longitude,order,n_reads) %>%
+  dplyr::summarise(total_count=n()*n_reads,.groups = 'drop')%>% # Find the total count for each location 
+  select( -n_reads) %>% group_by(latitude,longitude,order)%>%
+  dplyr::summarise(total_count = sum(total_count),.groups = 'drop')%>%# Merging values of the same location
   spread(key = order, value = total_count)%>% # Convert to wide data
   replace(is.na(.), 0) %>%
   mutate(sum = rowSums(select(., -c(1,2))))%>% # Add another row that counts the abundance of all 
   as.data.frame()
+
+############### PLEASE IGNORE WHATEVER IS BELOW ####################
 
 # Create base map
 worldmap <- map_data ("world")# From the tidyverse package
