@@ -1,12 +1,32 @@
+---
+title: "Q1_Laby_rmd_ver"
+author: "Faith"
+date: "2023-02-03"
+output: 
+  html_document:
+    code_folding: show
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    theme: cosmo
+    collapsed: true
+    smooth_scroll: true
+  editor_options: 
+    markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message = FALSE, warning = FALSE) 
+# hides messages & warnings
+```
+
 ## Setup
-###Load packages & plot setup
+Load packages & plot setup
 
-# NOTE PLEASE CHANGE DIRECTORY ACCORDINGLY
-# BE AWARE OF WHERE THE CODE AND THE DATA IS STORED
-
+```{r echo=TRUE}
 wd<- setwd("C:/Users/chiny/Desktop/FYP/R") 
 
-# Library is super messy but i will clean it up :")
 library(plyr) # data wrangling
 library(dplyr) # data wrangling
 library(tidyverse) # data wrangling and management
@@ -37,18 +57,17 @@ base_world  <- ggplot()+
         axis.ticks=element_blank(), axis.text.x=element_blank(),
         axis.text.y=element_blank())
 
+```
+
+
+## Part 1:  Global abundance map of Laby and Laby vs other protists
+
+### Global abundance map of Laby
+
+#### Preparing laby abundance data
+```{r echo=TRUE}
 ## Load dataset
 asv_sample_wide<-read.table(file = paste0(wd,'/DATA/ALL/metapr2_ASVs_selected_abundance_Eukaryota.tsv'), sep = '\t', header = TRUE)
-
-## Filling in the gap for climate variable
-## Noted: I will be dropping the variable ecosystem_climate as it is extremely similar to climate
-asv_sample_wide <- mutate(asv_sample_wide, climate = case_when((latitude <= 90 & latitude > 66.5) ~ "polar",
-                                                               (latitude >= -90 & latitude < -66.5) ~ "polar",
-                                                               (latitude <= 66.5 & latitude > 23.5) ~ "temperate",
-                                                               (latitude >= -66.5 & latitude < -23.5) ~ "temperate",
-                                                               (latitude <= 23.5 & latitude >= -23.5) ~ "equatorial")) 
-  
-# Part 1: Global abundance map Laby vs other protists
 
 # Filter for class laby 
 laby_asv_wide <- filter(asv_sample_wide,class == "Labyrinthulomycetes")
@@ -63,11 +82,10 @@ laby_order <- laby_asv_wide %>%
   replace(is.na(.), 0) %>%
   mutate(sum = rowSums(select(., -c(1,2))))%>% # Add another row that counts the abundance of all 
   as.data.frame()
+```
 
-
-# Plot abundance map of laby only
-png(file=paste0(wd,"/PLOTS/Laby_abundance_map_logged.jpeg"),width=1536,height=802) 
-
+#### Plotting abundance map of laby only
+```{r echo=TRUE, fig.align="center", fig.cap = "Fig 1: Global abundnace map of marine Labyrinthulomycetes",fig.width = 10, fig.asp = .62}
 base_world+
   geom_point(data=laby_order, 
              aes(x=longitude, y=latitude, 
@@ -77,19 +95,14 @@ base_world+
   scale_color_viridis_c()+
   scale_fill_viridis_c()
 
-dev.off()
+```
 
-# Plot scatterpie map of laby only
-png(file=paste0(wd,"/PLOTS/Laby_scatterpie_map.jpeg"),width=1536,height=802) 
 
-base_world+
-  geom_scatterpie(aes(x=longitude, y=latitude, r=log(sum)/2), 
-                  data=laby_order,cols=colnames(laby_order[,c(3:8)]), color=NA)+
-  geom_scatterpie_legend(log(laby_order$sum)/2, x=-160, y=-55)
+### Scatterpie of Laby vs other protists
 
-dev.off()
-
-# Preparing laby vs protist data: abundance with other class (Kingdom level)
+#### Preparing laby vs protist data: abundance with other class
+```{r echo=TRUE}
+# Kingdom level
 laby_euk<- asv_sample_wide %>%
   group_by(latitude,longitude,class,n_reads) %>%
   dplyr::summarise(total_count=n()*n_reads,.groups = 'drop')%>% # Find the total count for each location 
@@ -103,7 +116,7 @@ laby_euk<- asv_sample_wide %>%
   mutate(sum = rowSums(select(., -c(1,2))))%>% # Add another row that counts the abundance of all 
   as.data.frame()
 
-# Preparing laby vs protist data: abundance with other class (Supergroup level)
+# Supergroup Level
 laby_stram<- asv_sample_wide %>%
   filter(supergroup == "Stramenopiles")%>%
  group_by(latitude,longitude,class,n_reads) %>%
@@ -118,7 +131,7 @@ laby_stram<- asv_sample_wide %>%
   mutate(sum = rowSums(select(., -c(1,2))))%>% # Add another row that counts the abundance of all
   as.data.frame()
 
-# Preparing laby vs protist data: abundance with other class (Division level)
+# Division Level
 laby_sagen<- asv_sample_wide %>%
   filter(division == "Sagenista")%>%
   group_by(latitude,longitude,class,n_reads) %>%
@@ -133,51 +146,53 @@ laby_sagen<- asv_sample_wide %>%
   mutate(sum = rowSums(select(., -c(1,2))))%>% # Add another row that counts the abundance of all
   as.data.frame()
 
+```
 
-# Plotting scatterpie map of laby vs protist data: abundance with other class (Kingdom level)
-png(file=paste0(wd,"/PLOTS//Laby_vs_eukaryotes_scatterpie_map.jpeg"),width=1536,height=802) 
+
+#### Plotting scatterpie map of laby and other protist classes: abundance within Eukaryote Kingdom
+```{r echo=TRUE, fig.align="center", fig.cap = "Fig 2: Global abundnace map of marine Labyrinthulomycetes vs all protists classes",fig.width = 10, fig.asp = .62}
 
 base_world+
   geom_scatterpie(aes(x=longitude, y=latitude, r=log(sum)/3), 
                   data=laby_euk,cols=colnames(laby_euk[,c(3:(ncol(laby_euk)-1))]), color=NA)+
-  geom_scatterpie_legend(log(laby_euk$sum)/3, x=-160, y=-55)+
+  geom_scatterpie_legend(log(laby_euk$sum)/3, x=-160, y=-55)+ 
   theme(legend.position = "bottom")+
   scale_fill_manual(values = c("#440154","#21918c"))
 
+```
 
-#scale_fill_discrete(c("#440154","#21918c"))
-dev.off()
 
-# Plotting scatterpie map of laby vs protist data: abundance with other class (Supergroup level)
-png(file=paste0(wd,"/PLOTS/Laby_vs_stramenopiles_scatterpie_map.jpeg"),width=1536,height=802) 
+```{r echo=TRUE, fig.align="center", fig.cap = "Fig 3: Global abundnace map of marine Labyrinthulomycetes vs protists classes in Stramenopiles Supergroup",fig.width = 10, fig.asp = .62}
 
 base_world+
   geom_scatterpie(aes(x=longitude, y=latitude, r=log(sum)/3), 
                   data=laby_stram,cols=colnames(laby_stram[,c(3:(ncol(laby_stram)-1))]), color=NA)+
-  geom_scatterpie_legend(log(laby_stram$sum)/3, x=-160, y=-55)+
+  geom_scatterpie_legend(log(laby_stram$sum)/3, x=-160, y=-55)+ 
   theme(legend.position = "bottom")+
   scale_fill_manual(values = c("#440154","#21918c"))
 
-dev.off()
+```
 
-# Plotting scatterpie map of laby vs protist data: abundance with other class (Division level)
-png(file=paste0(wd,"/PLOTS/Laby_vs_sagenista_scatterpie_map.jpeg"),width=1536,height=802) 
+
+```{r echo=TRUE, fig.align="center", fig.cap = "Fig 4: Global abundnace map of marine Labyrinthulomycetes vs protists classes in Sagenista Division",fig.width = 10, fig.asp = .62}
 
 base_world+
   geom_scatterpie(aes(x=longitude, y=latitude, r=log(sum)/3), 
                   data=laby_sagen,cols=colnames(laby_sagen[,c(3:(ncol(laby_sagen)-1))]), color=NA)+
-  geom_scatterpie_legend(log(laby_sagen$sum)/3, x=-160, y=-55)+
+  geom_scatterpie_legend(log(laby_sagen$sum)/3, x=-160, y=-55)+ 
   theme(legend.position = "bottom")+
   scale_fill_manual(values = c("#440154","#21918c"))
 
-dev.off()
+```
 
 
-# Part 2: Co-occurrence plots of Laby vs other protist classes
+## Part 2: Co-occurrence plots of Laby vs other protist classes
 
-## METHOD 1: Find the top 10 most abundant classes within the kingdom of eukaryotes and find the correlation
+### METHOD 1: Find the top 10 most abundant classes within the kingdom of eukaryotes and find the correlation
 
-# Preparing data: Find the top 10 most abundant classes within the kingdom of eukaryotes
+#### Preparing data
+```{r echo=TRUE}
+# Find the top 10 most abundant classes within the kingdom of eukaryotes
 
 Euk_ordered<- asv_sample_wide %>%
   group_by(latitude,longitude,class,n_reads) %>%
@@ -193,19 +208,23 @@ Euk_ordered<- asv_sample_wide %>%
 Laby_10_euk_name <- Euk_ordered %>% 
   rows_insert(data.frame(class = "Labyrinthulomycetes", total_count = 1))
 
-# Preparing data: count total count of each class under each sampling occurrence (label+evi factors)
+# Count total count of each class under each sampling occurrence (label+evi factors)
 
 laby_10_euk_label_wide <- asv_sample_wide %>%
   filter(class %in% Laby_10_euk_name[,1])%>%
-  group_by(label,date,depth_level,depth,substrate,latitude,longitude,climate,temperature,salinity,ice_coverage,region,ecosystem,substrate_type,class,n_reads) %>% 
+  group_by(label,date,depth_level,depth,substrate,latitude,longitude,climate,temperature,salinity,ice_coverage,region,ecosystem,ecosystem_climate,substrate_type,class,n_reads) %>% 
   dplyr::summarise(total_count=n()*n_reads,.groups = 'drop')%>% # Find the total count for each label 
-  select( -n_reads) %>% group_by(label,date,depth_level,depth,substrate,latitude,longitude,climate,temperature,salinity,ice_coverage,region,ecosystem,substrate_type,class)%>%
+  select( -n_reads) %>% group_by(label,date,depth_level,depth,substrate,latitude,longitude,climate,temperature,salinity,ice_coverage,region,ecosystem,ecosystem_climate,substrate_type,class)%>%
   dplyr::summarise(total_count = sum(total_count),.groups = 'drop')%>%# Merging values of the same class
   spread(key = class, value = total_count)%>% # Convert to wide data
   replace(is.na(.), 0) %>%
   as.data.frame()
 
-# Plotting statistics from a paired correlation
+```
+
+
+####  Plotting statistics from a paired correlation
+```{r echo=TRUE, fig.align="center", fig.cap = "Fig 5: Correlation plot of Labyrinthulomycetes and the top 10 most abundant protist classes",fig.width = 10, fig.asp = .62}
 m1_cor_plot_laby_vs_10_euk = list()
 
 for (i in Euk_ordered[,1]) {
@@ -223,22 +242,17 @@ for (i in Euk_ordered[,1]) {
 
 do.call("grid.arrange", c(m1_cor_plot_laby_vs_10_euk, ncol=3))## display plot
 
-# Save plots to .jpeg. Makes a separate file for each plot.
-for (i in 1:10) {
-  png(file=paste0(wd,"/PLOTS/Method_1_Laby_vs_",Euk_ordered[i,1],"_corr_plot.jpeg"),width=1536,height=802) 
-  gridExtra::grid.arrange(m1_cor_plot_laby_vs_10_euk[[i]])
-  dev.off()
-}
+```
 
+### METHOD 2: Find the correlation between classes within the kingdom of eukaryotes and laby and find the top 10 R scores
 
-# METHOD 2: Find the correlation between classes within the kingdom of eukaryotes and laby and find the top 10 R scores
-
-# Preparing data: count total count of each class under each sampling occurrence (label+evi factors)
-
+#### Preparing data
+```{r echo=TRUE}
+# Count total count of each class under each sampling occurrence (label+evi factors)
 laby_all_euk_label_wide <- asv_sample_wide %>%
-  group_by(label,date,depth_level,depth,substrate,latitude,longitude,climate,temperature,salinity,ice_coverage,region,ecosystem,substrate_type,class,n_reads) %>% 
+  group_by(label,date,depth_level,depth,substrate,latitude,longitude,climate,temperature,salinity,ice_coverage,region,ecosystem,ecosystem_climate,substrate_type,class,n_reads) %>% 
   dplyr::summarise(total_count=n()*n_reads,.groups = 'drop')%>% # Find the total count for each label 
-  select( -n_reads) %>% group_by(label,date,depth_level,depth,substrate,latitude,longitude,climate,temperature,salinity,ice_coverage,region,ecosystem,substrate_type,class)%>%
+  select( -n_reads) %>% group_by(label,date,depth_level,depth,substrate,latitude,longitude,climate,temperature,salinity,ice_coverage,region,ecosystem,ecosystem_climate,substrate_type,class)%>%
   dplyr::summarise(total_count = sum(total_count),.groups = 'drop')%>%# Merging values of the same class
   spread(key = class, value = total_count)%>% # Convert to wide data
   replace(is.na(.), 0) %>%
@@ -261,7 +275,13 @@ cor_res_df <-cor_res_df%>%
   arrange(desc(r))%>%
   slice(1:10)
 
-# Plotting statistics from a paired correlation
+```
+
+Note this one is extremely questionable since the R value from cor.test() does not match that displayed in the plot :")
+
+####  Plotting statistics from a paired correlation
+```{r echo=TRUE, fig.align="center", fig.cap = "Fig 6: Correlation plot of Labyrinthulomycetes and top 10 protist classes with the highest R values ",fig.width = 10, fig.asp = .62}
+
 m2_cor_plot_laby_vs_10_euk = list()
 for (i in cor_res_df[,1]) {
   plot = ggplot( mapping = aes(x = log(laby_all_euk_label_wide$Labyrinthulomycetes), y = log(laby_all_euk_label_wide[,i]))) +
@@ -277,19 +297,14 @@ for (i in cor_res_df[,1]) {
 }
 
 do.call("grid.arrange", c(m2_cor_plot_laby_vs_10_euk, ncol=3))## display plot
+```
 
-# Save plots to .jpeg. Makes a separate file for each plot.
-for (i in 1:10) {
-  png(file=paste0(wd,"/PLOTS/Method_2_Laby_vs_",cor_res_df[i,1],"_corr_plot.jpeg"),width=1536,height=802) 
-  gridExtra::grid.arrange(m2_cor_plot_laby_vs_10_euk[[i]])
-  dev.off()
-}
 
-# Part 3: Global abundance map of exclusively class Laby
+## Part 3: Global abundance map of exclusively class Laby
 
 ## Plotting Global abundance map of exclusively class Laby
-
-### Preparing laby data: abundance within class 
+```{r echo=TRUE, fig.align="center", fig.cap = "Fig 7: Global abundnace map of orders within the class Labyrinthulomycetes",fig.width = 10, fig.asp = .62}
+# Preparing laby data: abundance within class 
 laby_order_wide <- laby_asv_wide %>%
   group_by(label,latitude,longitude,date,fraction_name,depth_level,depth,substrate,climate,temperature,salinity,ice_coverage,ecosystem,order,n_reads) %>%
   dplyr::summarise(total_count=n()*n_reads,.groups = 'drop')%>% # Find the total count for each label
@@ -300,9 +315,7 @@ laby_order_wide <- laby_asv_wide %>%
   mutate(sum = rowSums(select(., 14:19)))%>% # Add another row that counts the abundance of all 
   as.data.frame()
 
-### Plotting scatterpie map of orders in class Laby
-png(file=paste0(wd,"/PLOTS/Laby_global_abun_scatterpie_map.jpeg"),width=1536,height=802) 
-
+# Plotting scatterpie map of orders in class Laby
 base_world+
   geom_scatterpie(aes(x=longitude, y=latitude, r=log(sum)/2), 
                   data=laby_order_wide,cols=colnames(laby_order_wide[,c(14:(ncol(laby_order_wide)-1))]), color=NA)+
@@ -310,10 +323,11 @@ base_world+
   theme(legend.position = "bottom")+
   scale_fill_viridis_d()
 
-dev.off()
+```
 
 
-# Plotting Treemap of environmental factors affecting abundance in class Labyrinthulomycetes
+## Treemap of environmental factors affecting abundance in class Labyrinthulomycetes
+```{r echo=TRUE}
 
 envi_var<- data.frame(var = c("depth_level","substrate","climate","ecosystem"))
 
@@ -336,75 +350,14 @@ for (i in envi_var[,1]){
     scale_fill_viridis_d()+
     facet_wrap(~ laby_order_envi[,1])
   
-  # Saving plots
-  png(file=paste0(wd,"/PLOTS/Laby_envi_factor_",i,"_treemap.jpeg"),width=1536,height=802) 
   print(plot)
-  dev.off()
 }
-
-############## ALL CODES ABOVE RUN SMOOTHLY ############### MAY CONSIDER SHORTENING THE PREPING DATA AND PLOTTING PART
-
-########### CODE STORAGE SPACE ######################
-#USELESS CODES I DONT WANT TO DELETE
+```
 
 
 
+```{r echo=TRUE}
 
-
-
-######### Abundance and diversity index   #########
-
-# Preparing laby data: abundance within class 
-laby_order_wide <- laby_asv_wide %>%
-  group_by(latitude,longitude,date,fraction_name,depth_level,depth,substrate,climate,temperature,salinity,ice_coverage,ecosystem,ecosystem_climate,order) %>%
-  dplyr::summarise(total_count=n(), # To count the number of occurrence for each order at each location
-                   .groups = 'drop')%>%
-  spread(key = order, value = total_count)%>% # Convert to wide data
-  replace(is.na(.), 0) %>%
-  mutate(sum = rowSums(select(., 14:19)))%>% # Add another row that counts the abundance of all 
-  as.data.frame()
-
-# Calculating shannon's diversity index(Species Heterogeneity & evenness)
-laby_order_wide$shannond_h <- heterogeneity(laby_order_wide[,14:19], method = "shannon") # Assumes random sampling
-laby_order_wide$shannond_e<- evenness(laby_order_wide[,14:19], method = "shannon") # Assumes random sampling
-
-# Calculating Brillouin diversity index(Species Heterogeneity & evenness)
-laby_order_wide$brillouin_h <- heterogeneity(laby_order_wide[,14:19], method = "brillouin") # Does not assume random sampling
-laby_order_wide$brillouin_e <- evenness(laby_order_wide[,14:19], method = "brillouin") # Does not assume random sampling
-
-# Calculating Chao1 index (Species Rarefaction)
-laby_order_wide$Chao1 <- composition(laby_order_wide[,14:19], method = "chao1")
-
-# Calculating Margalef index (Species Richness)
-laby_order_wide$Margalef <- richness(laby_order_wide[,14:19], method = "margalef")
-
-# Plot diversity, rarefaction and Richness index map of laby 
-
-# Make list of variable names to loop over.
-plot_name_list = combn(names(laby_order_wide)[21:26], 1, simplify=FALSE)
-
-# Make plots.
-plot_list = list()
-for (i in 1:length(plot_name_list)) {
-  p = base_world+
-    geom_point(data=laby_order_wide, 
-                 aes(x=longitude, y=latitude, 
-                     colour =shannond_h,  # Edit out the log() if you dont want a logged version
-                     fill =shannond_h,
-                     size = shannond_h), 
-                 pch=21, alpha=I(0.7))+
-    scale_color_gradient(low="yellow", high="red")+
-    scale_fill_gradient(low="yellow", high="red")+
-    ggtitle(paste("Scatter map of Labyrinthulomycetes according to",plot_name_list[i],"index"))+
-    theme(plot.title = element_text(hjust = 0.5))
-  plot_list[[i]] = p
-}
-
-# Save plots to .jpeg. Makes a separate file for each plot.
-for (i in 1:length(plot_name_list)) {
-  png(file=paste0(wd,"/PLOTS/Laby_",plot_name_list[i],"_scatter_map.jpeg"),width=1536,height=802) 
-  print(plot_list[[i]])
-  dev.off()
-}
+```
 
 
