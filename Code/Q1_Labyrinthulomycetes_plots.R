@@ -48,6 +48,7 @@ asv_sample_wide <- mutate(asv_sample_wide, climate = case_when((latitude <= 90 &
                                                                (latitude >= -66.5 & latitude < -23.5) ~ "temperate",
                                                                (latitude <= 23.5 & latitude >= -23.5) ~ "equatorial")) 
   
+
 # Part 1: Global abundance map Laby vs other protists
 
 # Filter for class laby 
@@ -194,6 +195,7 @@ Laby_10_euk_name <- Euk_ordered %>%
   rows_insert(data.frame(class = "Labyrinthulomycetes", total_count = 1))
 
 # Preparing data: count total count of each class under each sampling occurrence (label+evi factors)
+# The number of variables added here seem useless
 
 laby_10_euk_label_wide <- asv_sample_wide %>%
   filter(class %in% Laby_10_euk_name[,1])%>%
@@ -312,10 +314,17 @@ base_world+
 
 dev.off()
 
+## Cut continuous variable into discrete variable
+laby_order_wide$temperature<- as.factor(cut(laby_order_wide$temperature,breaks = seq(min(laby_order_wide$temperature, na.rm = TRUE), 
+                                                                                     max(laby_order_wide$temperature, na.rm = TRUE), 
+                                                                                     by = 5)))
+laby_order_wide$salinity<- as.factor(cut(laby_order_wide$salinity,breaks = seq(min(laby_order_wide$salinity, na.rm = TRUE), 
+                                                                               max(laby_order_wide$salinity, na.rm = TRUE), 
+                                                                               by = 5)))
 
-# Plotting Treemap of environmental factors affecting abundance in class Labyrinthulomycetes
+# Plotting Treemap of environmental factors affecting abundance in class Labyrinthulomycetes 
 
-envi_var<- data.frame(var = c("depth_level","substrate","climate","ecosystem"))
+envi_var<- data.frame(var = c("depth_level","substrate","climate","ecosystem","temperature","salinity"))
 
 for (i in envi_var[,1]){
   # Preparing data
@@ -341,6 +350,7 @@ for (i in envi_var[,1]){
   print(plot)
   dev.off()
 }
+
 
 ############## ALL CODES ABOVE RUN SMOOTHLY ############### MAY CONSIDER SHORTENING THE PREPING DATA AND PLOTTING PART
 
