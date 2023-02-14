@@ -1,0 +1,269 @@
+---
+title: "Q1_Laby_rmd_ver"
+author: "Faith"
+date: "2023-02-09"
+output: 
+  html_document:
+    code_folding: show
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    theme: cosmo
+    collapsed: true
+    smooth_scroll: true
+  editor_options: 
+    markdown: 
+    wrap: 72
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message = FALSE, warning = FALSE) 
+# hides messages & warnings
+```
+
+## Setup
+Load packages & plot setup
+
+```{r echo=TRUE}
+wd<- setwd("C:/Users/chiny/Desktop/FYP/R") 
+
+library(plyr) # data wrangling
+library(dplyr) # data wrangling
+library(tidyverse) # data wrangling and management
+library(ggplot2) # visualization
+library(phyloseq) # metabarcoding
+library(ape) # phylogentic tree creation 
+library(cluster) # Find clusters in data
+library(vegan) # Ecological statistic tools 
+library(tabula) # Tests and measures of diversity
+library(goeveg) # NMDS screeplot
+library(scatterpie) # Scatterpie plot
+library(smplot2) # Statistical data visualization that complements ggplot2
+library(gridExtra) # Extensions to the grid system in ggplot2
+library(treemapify) # Extensions to create treemaps in ggplot2
+library(viridis) # Colourblind friendly map
+library(reshape2)
+
+```
+
+### Preparing data for downstream analysis 
+
+#### Loading and preparing data
+```{r echo=TRUE}
+## Load dataset
+asv_sample_wide<-read.table(file = paste0(wd,'/DATA/ALL/metapr2_ASVs_selected_abundance_Eukaryota.tsv'), sep = '\t', header = TRUE)
+
+#Preparing data for RDA
+
+# Filter for class laby 
+laby_asv_wide <- filter(asv_sample_wide,class == "Labyrinthulomycetes")
+
+
+### Preparing laby data: abundance within class 
+laby_order_wide <- laby_asv_wide %>%
+  group_by(label,latitude,date,depth_level,substrate,climate,temperature,salinity,ecosystem,order,n_reads) %>%
+  dplyr::summarise(total_count=n()*n_reads,.groups = 'drop')%>% # Find the total count for each label
+  select( -n_reads) %>% group_by(label,latitude,date,depth_level,substrate,climate,temperature,salinity,ecosystem,order)%>%
+  dplyr::summarise(total_count = sum(total_count),.groups = 'drop')%>%# Merging values of the same order
+  spread(key = order, value = total_count)%>% # Convert to wide data
+  replace(is.na(.), 0) %>%
+  as.data.frame()
+
+## Filling in the gap for climate variable
+## Noted: I will be dropping the variable ecosystem_climate as it is extremely similar to climate
+laby_edited_wide <- mutate(laby_order_wide, climate = case_when((latitude <= 90 & latitude > 66.5) ~ "polar",
+                                                               (latitude >= -90 & latitude < -66.5) ~ "polar",
+                                                               (latitude <= 66.5 & latitude > 23.5) ~ "temperate",
+                                                               (latitude >= -66.5 & latitude < -23.5) ~ "temperate",
+                                                               (latitude <= 23.5 & latitude >= -23.5) ~ "equatorial")) 
+
+
+## Cut continuous variable into discrete variable
+laby_edited_wide$temperature<- as.factor(cut(laby_edited_wide$temperature,breaks = seq(min(laby_edited_wide$temperature, na.rm = TRUE),
+                                                                                     max(laby_edited_wide$temperature, na.rm = TRUE),
+                                                                                     by = 5)))
+laby_edited_wide$salinity<- as.factor(cut(laby_edited_wide$salinity,breaks = seq(min(laby_edited_wide$salinity, na.rm = TRUE),
+                                                                               max(laby_edited_wide$salinity, na.rm = TRUE),
+                                                                               by = 5)))
+
+laby_edited_wide$latitude<- as.factor(cut(laby_edited_wide$latitude,breaks = seq(min(-90, na.rm = TRUE), 
+                                                                               max(90, na.rm = TRUE), 
+                                                                               by = 30)))
+
+## Converting dates into months
+laby_edited_wide$date<- months(as.Date(laby_edited_wide$date))
+
+# Make each collection site unique according to their labels 
+laby_edited_wide$label <- ave(as.character(laby_edited_wide$label), laby_edited_wide$label, FUN=function(x) if (length(x)>1) paste0(x[1], '(', seq_along(x), ')') else x[1])
+
+# Ensure that they are all factors
+laby_edited_wide<- laby_edited_wide%>%
+  mutate_if(is.character,as.factor)
+
+#Remove rows with NA
+laby_edited_wide<-na.omit(laby_edited_wide)
+
+
+```
+
+# Check for collinearity in environmental factors 
+```{r echo=TRUE, fig.align="center", fig.cap = "Fig 1: Correlation heatmap of environmetal factors",fig.width = 10, fig.asp = .62}
+# Change categorical data into numerical data
+laby_edited_unclass <- data.frame(sapply(laby_edited_wide[,-1], unclass))
+
+# creating correlation matrix
+corr_mat <- round(abs(cor(laby_edited_unclass[,1:8])),2)
+corr_mat <- melt(corr_mat)
+
+# plotting the correlation heatmap
+ggplot(data = corr_mat, aes(x=Var1, y=Var2,
+                                   fill=value)) +
+  geom_tile() +
+  geom_text(aes(Var2, Var1, label = value),
+            color = "black", size = 10)+
+  scale_fill_distiller(palette = "YlOrRd", direction=1) +
+  theme(axis.title.x=element_blank(),
+        axis.title.y=element_blank(),
+        axis.text.x=element_text(size=15),
+        axis.text.y=element_text(size=15))
+
+
+```
+
+# Redundancy analysis in class Labyrinthulomycetes
+
+## Run RDA
+```{r echo=TRUE}
+# Subset environmental factors 
+laby_edited_wide.envi<- laby_edited_wide[,1:9]
+
+# Subsetting population data
+laby_edited_wide.pop<- laby_edited_wide[,-(2:9)]
+
+# Since there are alot of zeros seen there maybe a double zero problem, hence I will be using the Hellinger transformation which expresses abundances as the square-root of their relative abundance at each site 
+laby_hel_wide.pop <- decostand(laby_edited_wide.pop[,-1], method = "hellinger")
+
+laby.rda <- rda(laby_hel_wide.pop ~ ., data = laby_edited_wide.envi[,-1])
+```
+
+## Selecting variables 
+```{r echo=TRUE}
+fwd.sel <- ordiR2step(rda(laby_hel_wide.pop ~ 1, data = laby_edited_wide.envi[,-1]), # lower model limit 
+                      laby.rda, # upper model limit (the "full" model)
+                      direction = "forward",
+                      R2scope = TRUE, # can't surpass the "full" model's R2
+                      pstep = 1000,
+                      trace = FALSE)
+
+# Check the new model with forward-selected variables
+fwd.sel$call
+
+# Test again with new model
+laby.rda.signif <- rda(laby_hel_wide.pop ~latitude + date + salinity + temperature + ecosystem + depth_level + climate, data = laby_edited_wide.envi[,-1])
+
+# Check the adjusted r2
+RsquareAdj(laby.rda.signif)
+
+# Test significance of RDA
+anova.cca(laby.rda.signif, step = 1000, by = "term")
+
+```
+
+## RDA plot 
+```{r echo=TRUE, fig.align="center", fig.cap = c("Fig 2: Type 1 scaling RDA plot of laby","Fig 3: Type 2 scaling RDA plot of laby"),fig.width = 10, fig.asp = .62}
+
+# Type 1 scaling: Distances among objects reflect their similarities
+ordiplot(laby.rda.signif, scaling = 1, type = "text")
+
+# Type 2 scaling: Angles between variables reflect their correlation
+ordiplot(laby.rda.signif, scaling = 2, type = "text")
+
+
+```
+
+
+## To test for collinearity in data 
+```{r echo=TRUE}
+sqrt(vif.cca(laby.rda))
+
+```
+
+# Non-metric Multidimensional Scaling (NMDS) in class Labyrinthulomycetes
+
+## Run and plot scree plot
+```{r eval = FALSE}
+# This chunk was meant to run scree plot but rmd keeps getting stuck here 
+# I will not run this chunk as it takes too long, here is the output instead
+
+```
+
+![Fig 4: Scree plot of NMDs](C:/Users/chiny/Desktop/FYP/R/PLOTS/Q2/PLOTS/Q2/Scree_plot_NMDs.jpeg)
+
+k = 2 (i.e. 2 dimensions) provides a suitable stress value that is less than 0.15. I will thus proceed to run an NMDS with k = 2.
+
+## Run NMDS
+```{r echo=TRUE}
+NMDS_laby <- metaMDS(laby_edited_wide.pop[,-1], k = 2, trymax = 20, 
+                     trace = F, autotransform = FALSE,
+                     distance = "bray")
+
+# View NMDS results
+NMDS_laby
+```
+
+## Plot stress plot 
+```{r echo=TRUE, fig.align="center", fig.cap = "Fig 5: Stress plot of NMDs",fig.width = 10, fig.asp = .62}
+stressplot(NMDS_laby)
+
+```
+
+
+## Plot NMDs
+
+```{r echo=TRUE, fig.align="center",fig.cap=c("Fig 6:NMDS plot showing community composition of  labyrinthulomycetes across depth level", "Fig 7:NMDS plot showing community composition of  labyrinthulomycetes across sample substrate","Fig 8:NMDS plot showing community composition of  labyrinthulomycetes across climate","Fig 9:NMDS plot showing community composition of  labyrinthulomycetes across ecosystem","Fig 10:NMDS plot showing community composition of  labyrinthulomycetes across temperature","Fig 11:NMDS plot showing community composition of  labyrinthulomycetes across salinity","Fig 12:NMDS plot showing community composition of  labyrinthulomycetes across latitude","Fig 13:NMDS plot showing community composition of  labyrinthulomycetes across months")}
+
+envi_var<- data.frame(var = c("depth_level","substrate","climate","ecosystem","temperature","salinity","latitude","date"))
+
+# Extract NMDS scores for plotting with ggplot2
+## species scores
+species.scores <- as.data.frame(scores(NMDS_laby, "species"))
+species.scores$species <- rownames(species.scores) 
+species.scores$type <- "Species"
+
+## site scores
+site.scores <- as.data.frame(scores(NMDS_laby, "sites"))
+site.scores <- cbind (site.scores, 
+                      latitude = laby_edited_wide.envi[,-1]$latitude, 
+                      date = laby_edited_wide.envi[,-1]$date, 
+                      depth_level = laby_edited_wide.envi[,-1]$depth_level,
+                      substrate = laby_edited_wide.envi[,-1]$substrate, 
+                      climate = laby_edited_wide.envi[,-1]$climate, 
+                      temperature = laby_edited_wide.envi[,-1]$temperature,
+                      salinity = laby_edited_wide.envi[,-1]$salinity, 
+                      ecosystem = laby_edited_wide.envi[,-1]$ecosystem) # Add environmental factors
+
+
+for (i in envi_var[,1]){
+  ggplot() + 
+  geom_point(data = species.scores,
+             aes(x = NMDS1,
+                 y = NMDS2),
+             size = 2) +
+  geom_point(data = site.scores,
+             aes(x = NMDS1,
+                 y = NMDS2,
+                 colour = get(i)),
+             shape = 17,
+             size = 2) +
+  # classify sites by variables and display using 95% confidence ellipses
+  stat_ellipse(data = site.scores,
+               aes(x = NMDS1,
+                   y = NMDS2,
+                   colour = get(i)),
+               type = "norm") +
+  labs(color=i) +
+  scale_color_viridis_d()+
+  theme_minimal() 
+
+}
+
+```

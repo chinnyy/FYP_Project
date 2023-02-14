@@ -315,19 +315,19 @@ do.call("grid.arrange", c(m2_cor_plot_laby_vs_10_euk, ncol=3))## display plot
 ```{r echo=TRUE, fig.align="center", fig.cap = "Fig 7: Global abundnace map of orders within the class Labyrinthulomycetes",fig.width = 10, fig.asp = .62}
 # Preparing laby data: abundance within class 
 laby_order_wide <- laby_asv_wide %>%
-  group_by(label,latitude,longitude,date,fraction_name,depth_level,depth,substrate,climate,temperature,salinity,ice_coverage,ecosystem,order,n_reads) %>%
+  group_by(label,latitude,longitude,date,depth_level,substrate,climate,temperature,salinity,ice_coverage,ecosystem,order,n_reads) %>%
   dplyr::summarise(total_count=n()*n_reads,.groups = 'drop')%>% # Find the total count for each label
-  select( -n_reads) %>% group_by(label,latitude,longitude,date,fraction_name,depth_level,depth,substrate,climate,temperature,salinity,ice_coverage,ecosystem,order)%>%
+  select( -n_reads) %>% group_by(label,latitude,longitude,date,depth_level,substrate,climate,temperature,salinity,ice_coverage,ecosystem,order)%>%
   dplyr::summarise(total_count = sum(total_count),.groups = 'drop')%>%# Merging values of the same order
   spread(key = order, value = total_count)%>% # Convert to wide data
   replace(is.na(.), 0) %>%
-  mutate(sum = rowSums(select(., 14:19)))%>% # Add another row that counts the abundance of all 
+  mutate(sum = rowSums(select(., 12:17)))%>% # Add another row that counts the abundance of all 
   as.data.frame()
 
 # Plotting scatterpie map of orders in class Laby
 base_world+
   geom_scatterpie(aes(x=longitude, y=latitude, r=log(sum)/2), 
-                  data=laby_order_wide,cols=colnames(laby_order_wide[,c(14:(ncol(laby_order_wide)-1))]), color=NA)+
+                  data=laby_order_wide,cols=colnames(laby_order_wide[,c(12:(ncol(laby_order_wide)-1))]), color=NA)+
   geom_scatterpie_legend(log(laby_order_wide$sum)/2, x=-160, y=-55)+
   theme(legend.position = "bottom")+
   scale_fill_viridis_d()
@@ -338,7 +338,7 @@ base_world+
 ### Treemap of environmental factors affecting abundance in class Labyrinthulomycetes
 A little messy here but I thought bigger figures would look better
 May consider barplot instead 
-```{r echo=TRUE, fig.align="center",fig.cap=c("Fig 8:Tree maps of Labyrinthulomycetes distribution according to depth level", "Fig 9:Tree maps of Labyrinthulomycetes distribution according to sample substrate","Fig 10:Tree maps of Labyrinthulomycetes distribution according to climate","Fig 11:Tree maps of Labyrinthulomycetes distribution according to ecosystem","Fig 12:Tree maps of Labyrinthulomycetes distribution according to temperature","Fig 13:Tree maps of Labyrinthulomycetes distribution according to salinity")}
+```{r echo=TRUE, fig.align="center",fig.cap=c("Fig 8:Treemap of Labyrinthulomycetes distribution according to depth level", "Fig 9:Treemap of Labyrinthulomycetes distribution according to sample substrate","Fig 10:Treemap of Labyrinthulomycetes distribution according to climate","Fig 11:Treemap of Labyrinthulomycetes distribution according to ecosystem","Fig 12:Treemap of Labyrinthulomycetes distribution according to temperature","Fig 13:Treemap of Labyrinthulomycetes distribution according to salinity","Fig 14:Treemap of Labyrinthulomycetes distribution according to latitude","Fig 15:Treemap of Labyrinthulomycetes distribution according to months")}
 
 ## Cut continuous variable into discrete variable
 laby_order_wide$temperature<- as.factor(cut(laby_order_wide$temperature,breaks = seq(min(laby_order_wide$temperature, na.rm = TRUE), 
@@ -348,13 +348,20 @@ laby_order_wide$salinity<- as.factor(cut(laby_order_wide$salinity,breaks = seq(m
                                                                                max(laby_order_wide$salinity, na.rm = TRUE), 
                                                                                by = 5)))
 
+laby_order_wide$latitude<- as.factor(cut(laby_order_wide$latitude,breaks = seq(min(-90, na.rm = TRUE), 
+                                                                               max(90, na.rm = TRUE), 
+                                                                               by = 30)))
+## Converting dates into months
+laby_order_wide$date<- months(as.Date(laby_order_wide$date))
+laby_order_wide$date = factor(laby_order_wide$date, levels=month.name)
+
 # Listing interested environmental variables 
-envi_var<- data.frame(var = c("depth_level","substrate","climate","ecosystem","temperature","salinity"))
+envi_var<- data.frame(var = c("depth_level","substrate","climate","ecosystem","temperature","salinity","latitude","date"))
 
 for (i in envi_var[,1]){
   # Preparing data
   laby_order_envi <- laby_order_wide %>%
-    gather(.,order, total_count,14:19 , factor_key=TRUE)%>% # Converting to long data
+    gather(.,order, total_count,12:17 , factor_key=TRUE)%>% # Converting to long data
     group_by(across(all_of(c(i,"order","total_count"))))%>%
     dplyr::summarise(total_count = sum(total_count),.groups = 'drop')%>% #Merging all data according to ecosystem
     group_by(across(all_of(c(i,"order")))) %>%

@@ -67,7 +67,7 @@ laby_order <- laby_asv_wide %>%
 
 
 # Plot abundance map of laby only
-png(file=paste0(wd,"/PLOTS/Laby_abundance_map_logged.jpeg"),width=1536,height=802) 
+png(file=paste0(wd,"/PLOTS/Q1/Laby_abundance_map_logged.jpeg"),width=1536,height=802) 
 
 base_world+
   geom_point(data=laby_order, 
@@ -77,16 +77,6 @@ base_world+
              pch=21, alpha=I(0.7),size=3 )+
   scale_color_viridis_c()+
   scale_fill_viridis_c()
-
-dev.off()
-
-# Plot scatterpie map of laby only
-png(file=paste0(wd,"/PLOTS/Laby_scatterpie_map.jpeg"),width=1536,height=802) 
-
-base_world+
-  geom_scatterpie(aes(x=longitude, y=latitude, r=log(sum)/2), 
-                  data=laby_order,cols=colnames(laby_order[,c(3:8)]), color=NA)+
-  geom_scatterpie_legend(log(laby_order$sum)/2, x=-160, y=-55)
 
 dev.off()
 
@@ -136,7 +126,7 @@ laby_sagen<- asv_sample_wide %>%
 
 
 # Plotting scatterpie map of laby vs protist data: abundance with other class (Kingdom level)
-png(file=paste0(wd,"/PLOTS//Laby_vs_eukaryotes_scatterpie_map.jpeg"),width=1536,height=802) 
+png(file=paste0(wd,"/PLOTS/Q1/Laby_vs_eukaryotes_scatterpie_map.jpeg"),width=1536,height=802) 
 
 base_world+
   geom_scatterpie(aes(x=longitude, y=latitude, r=log(sum)/3), 
@@ -145,12 +135,10 @@ base_world+
   theme(legend.position = "bottom")+
   scale_fill_manual(values = c("#440154","#21918c"))
 
-
-#scale_fill_discrete(c("#440154","#21918c"))
 dev.off()
 
 # Plotting scatterpie map of laby vs protist data: abundance with other class (Supergroup level)
-png(file=paste0(wd,"/PLOTS/Laby_vs_stramenopiles_scatterpie_map.jpeg"),width=1536,height=802) 
+png(file=paste0(wd,"/PLOTS/Q1/Laby_vs_stramenopiles_scatterpie_map.jpeg"),width=1536,height=802) 
 
 base_world+
   geom_scatterpie(aes(x=longitude, y=latitude, r=log(sum)/3), 
@@ -162,7 +150,7 @@ base_world+
 dev.off()
 
 # Plotting scatterpie map of laby vs protist data: abundance with other class (Division level)
-png(file=paste0(wd,"/PLOTS/Laby_vs_sagenista_scatterpie_map.jpeg"),width=1536,height=802) 
+png(file=paste0(wd,"/PLOTS/Q1/Laby_vs_sagenista_scatterpie_map.jpeg"),width=1536,height=802) 
 
 base_world+
   geom_scatterpie(aes(x=longitude, y=latitude, r=log(sum)/3), 
@@ -227,7 +215,7 @@ do.call("grid.arrange", c(m1_cor_plot_laby_vs_10_euk, ncol=3))## display plot
 
 # Save plots to .jpeg. Makes a separate file for each plot.
 for (i in 1:10) {
-  png(file=paste0(wd,"/PLOTS/Method_1_Laby_vs_",Euk_ordered[i,1],"_corr_plot.jpeg"),width=1536,height=802) 
+  png(file=paste0(wd,"/PLOTS/Q1/Method_1_Laby_vs_",Euk_ordered[i,1],"_corr_plot.jpeg"),width=1536,height=802) 
   gridExtra::grid.arrange(m1_cor_plot_laby_vs_10_euk[[i]])
   dev.off()
 }
@@ -254,7 +242,7 @@ all_class_name<- data.frame(name= unique(asv_sample_wide$class))%>%
 
 for (i in all_class_name[,1]){
   cor_res <- cor.test(log(laby_all_euk_label_wide$Labyrinthulomycetes), log(laby_all_euk_label_wide[,i]), method = "spearman",exact=FALSE,formula = ~ x + y,alternative = "two.sided")
-  cor_res_col<- cbind(class = i, r = cor_res$estimate[["rho"]],p_value = cor_res$p.value)
+  cor_res_col<- cbind(class = i, r = round(cor_res$estimate[["rho"]],2),p_value = cor_res$p.value)
   cor_res_df <- rbind(cor_res_df,cor_res_col)
 }
 
@@ -282,7 +270,7 @@ do.call("grid.arrange", c(m2_cor_plot_laby_vs_10_euk, ncol=3))## display plot
 
 # Save plots to .jpeg. Makes a separate file for each plot.
 for (i in 1:10) {
-  png(file=paste0(wd,"/PLOTS/Method_2_Laby_vs_",cor_res_df[i,1],"_corr_plot.jpeg"),width=1536,height=802) 
+  png(file=paste0(wd,"/PLOTS/Q1/Method_2_Laby_vs_",cor_res_df[i,1],"_corr_plot.jpeg"),width=1536,height=802) 
   gridExtra::grid.arrange(m2_cor_plot_laby_vs_10_euk[[i]])
   dev.off()
 }
@@ -293,21 +281,21 @@ for (i in 1:10) {
 
 ### Preparing laby data: abundance within class 
 laby_order_wide <- laby_asv_wide %>%
-  group_by(label,latitude,longitude,date,fraction_name,depth_level,depth,substrate,climate,temperature,salinity,ice_coverage,ecosystem,order,n_reads) %>%
+  group_by(label,latitude,longitude,date,depth_level,substrate,climate,temperature,salinity,ice_coverage,ecosystem,order,n_reads) %>%
   dplyr::summarise(total_count=n()*n_reads,.groups = 'drop')%>% # Find the total count for each label
-  select( -n_reads) %>% group_by(label,latitude,longitude,date,fraction_name,depth_level,depth,substrate,climate,temperature,salinity,ice_coverage,ecosystem,order)%>%
+  select( -n_reads) %>% group_by(label,latitude,longitude,date,depth_level,substrate,climate,temperature,salinity,ice_coverage,ecosystem,order)%>%
   dplyr::summarise(total_count = sum(total_count),.groups = 'drop')%>%# Merging values of the same order
   spread(key = order, value = total_count)%>% # Convert to wide data
   replace(is.na(.), 0) %>%
-  mutate(sum = rowSums(select(., 14:19)))%>% # Add another row that counts the abundance of all 
+  mutate(sum = rowSums(select(., 12:17)))%>% # Add another row that counts the abundance of all 
   as.data.frame()
 
 ### Plotting scatterpie map of orders in class Laby
-png(file=paste0(wd,"/PLOTS/Laby_global_abun_scatterpie_map.jpeg"),width=1536,height=802) 
+png(file=paste0(wd,"/PLOTS/Q1/Laby_global_abun_scatterpie_map.jpeg"),width=1536,height=802) 
 
 base_world+
   geom_scatterpie(aes(x=longitude, y=latitude, r=log(sum)/2), 
-                  data=laby_order_wide,cols=colnames(laby_order_wide[,c(14:(ncol(laby_order_wide)-1))]), color=NA)+
+                  data=laby_order_wide,cols=colnames(laby_order_wide[,c(12:(ncol(laby_order_wide)-1))]), color=NA)+
   geom_scatterpie_legend(log(laby_order_wide$sum)/2, x=-160, y=-55)+
   theme(legend.position = "bottom")+
   scale_fill_viridis_d()
@@ -322,14 +310,21 @@ laby_order_wide$salinity<- as.factor(cut(laby_order_wide$salinity,breaks = seq(m
                                                                                max(laby_order_wide$salinity, na.rm = TRUE), 
                                                                                by = 5)))
 
+laby_order_wide$latitude<- as.factor(cut(laby_order_wide$latitude,breaks = seq(min(-90, na.rm = TRUE), 
+                                                                               max(90, na.rm = TRUE), 
+                                                                               by = 30)))
+## Converting dates into months
+laby_order_wide$date<- months(as.Date(laby_order_wide$date))
+laby_order_wide$date = factor(laby_order_wide$date, levels=month.name)
+
 # Plotting Treemap of environmental factors affecting abundance in class Labyrinthulomycetes 
 
-envi_var<- data.frame(var = c("depth_level","substrate","climate","ecosystem","temperature","salinity"))
+envi_var<- data.frame(var = c("depth_level","substrate","climate","ecosystem","temperature","salinity","latitude","date"))
 
 for (i in envi_var[,1]){
   # Preparing data
   laby_order_envi <- laby_order_wide %>%
-    gather(.,order, total_count,14:19 , factor_key=TRUE)%>% # Converting to long data
+    gather(.,order, total_count,12:17 , factor_key=TRUE)%>% # Converting to long data
     group_by(across(all_of(c(i,"order","total_count"))))%>%
     dplyr::summarise(total_count = sum(total_count),.groups = 'drop')%>% #Merging all data according to ecosystem
     group_by(across(all_of(c(i,"order")))) %>%
@@ -346,7 +341,7 @@ for (i in envi_var[,1]){
     facet_wrap(~ laby_order_envi[,1])
   
   # Saving plots
-  png(file=paste0(wd,"/PLOTS/Laby_envi_factor_",i,"_treemap.jpeg"),width=1536,height=802) 
+  png(file=paste0(wd,"/PLOTS/Q1/Laby_envi_factor_",i,"_treemap.jpeg"),width=1536,height=802) 
   print(plot)
   dev.off()
 }
@@ -356,10 +351,6 @@ for (i in envi_var[,1]){
 
 ########### CODE STORAGE SPACE ######################
 #USELESS CODES I DONT WANT TO DELETE
-
-
-
-
 
 
 ######### Abundance and diversity index   #########
