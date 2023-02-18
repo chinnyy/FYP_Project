@@ -4,8 +4,6 @@
 # NOTE PLEASE CHANGE DIRECTORY ACCORDINGLY
 # BE AWARE OF WHERE THE CODE AND THE DATA IS STORED
 
-wd<- setwd("C:/Users/chiny/Desktop/FYP/R") 
-
 # Library is super messy but i will clean it up :")
 library(plyr) # data wrangling
 library(dplyr) # data wrangling
@@ -22,6 +20,7 @@ library(smplot2) # Statistical data visualization that complements ggplot2
 library(gridExtra) # Extensions to the grid system in ggplot2
 library(treemapify) # Extensions to create treemaps in ggplot2
 library(viridis) # Colourblind friendly map
+library(rstudioapi)
 
 # Create base map
 worldmap <- map_data ("world")# From the tidyverse package
@@ -38,6 +37,8 @@ base_world  <- ggplot()+
         axis.text.y=element_blank())
 
 ## Load dataset
+wd<- setwd(dirname(rstudioapi::getActiveDocumentContext()$path)) # set working directory
+
 asv_sample_wide<-read.table(file = paste0(wd,'/DATA/ALL/metapr2_ASVs_selected_abundance_Eukaryota.tsv'), sep = '\t', header = TRUE)
 
 # Part 1: Global abundance map Laby vs other protists
