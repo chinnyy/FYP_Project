@@ -57,31 +57,30 @@ laby_order <- laby_asv_wide %>%
    mutate(sum = rowSums(select(., -c(1,2,3))))%>% # Add another row that counts the abundance of all 
   as.data.frame()
 
-# Function to remove bottom 5% of the dataset and add row to normalize
+# Function to remove bottom 5% of the dataset and normalize all columns
 fun_rem_5<- function(data) {
   p05 <- quantile(data$sum, 0.05)
   laby_95<- data[which(data$sum >= p05),]
   
-  # Add a row normalizing data 
-  laby_95$norm<- laby_95$sum/mean(laby_95$sum)
+  # Normalize all columns
+  laby_95$factor<- laby_95$sum/mean(laby_95$sum)
   
-  return(laby_95)
+  laby_norm<- cbind(laby_95[1:3],laby_95[,6:length(laby_95)-2]/laby_95$factor)
+
+
+  return(laby_norm)
 }
 
-laby_order_95<- fun_rem_5(laby_order)
+laby_order_norm<- fun_rem_5(laby_order)
 
-
-# Plot abundance map of laby only
-png(file=paste0(wd,"/PLOTS/Q1/Laby_abundance_map_logged.jpeg"),width=1536,height=802) 
+### Plotting scatterpie map of orders in class Laby
+png(file=paste0(wd,"/PLOTS/Q1/Laby_global_abun_scatterpie_map.jpeg"),width=1536,height=802) 
 
 base_world+
-  geom_point(data=laby_order_95, 
-             aes(x=longitude, y=latitude, 
-                 colour =log(norm),  # Edit out the log() if you dont want a logged version
-                 fill =log(norm)), 
-             pch=21, alpha=I(0.7),size=3 )+ 
-  scale_color_viridis_c()+
-  scale_fill_viridis_c()
+  geom_scatterpie(aes(x=longitude, y=latitude), 
+                  data=laby_order_norm,cols=colnames(laby_order_norm[,c(4:9)]), color=NA)+
+  theme(legend.position = "bottom")+
+  scale_fill_viridis_d()
 
 dev.off()
 
@@ -100,7 +99,7 @@ laby_euk<- asv_sample_wide %>%
   as.data.frame()
 
 # Normalize data
-laby_euk_95<- fun_rem_5(laby_euk) 
+laby_euk_norm<- fun_rem_5(laby_euk) 
 
 # Preparing laby vs protist data: abundance with other class (Supergroup level)
 laby_stram<- asv_sample_wide %>%
@@ -118,7 +117,7 @@ laby_stram<- asv_sample_wide %>%
   as.data.frame()
 
 # Normalize data
-laby_stram_95<- fun_rem_5(laby_stram) 
+laby_stram_norm<- fun_rem_5(laby_stram) 
 
 # Preparing laby vs protist data: abundance with other class (Division level)
 laby_sagen<- asv_sample_wide %>%
@@ -136,15 +135,14 @@ laby_sagen<- asv_sample_wide %>%
   as.data.frame()
 
 # Normalize data
-laby_sagen_95<- fun_rem_5(laby_sagen) 
+laby_sagen_norm<- fun_rem_5(laby_sagen) 
 
 # Plotting scatterpie map of laby vs protist data: abundance with other class (Kingdom level)
 png(file=paste0(wd,"/PLOTS/Q1/Laby_vs_eukaryotes_scatterpie_map.jpeg"),width=1536,height=802) 
 
 base_world+
-  geom_scatterpie(aes(x=longitude, y=latitude, r=log(norm)*2), 
-                  data=laby_euk_95,cols=colnames(laby_euk_95[,c(4:5)]), color=NA)+
-  geom_scatterpie_legend(log(laby_euk_95$norm)*2, x=-160, y=-55)+
+  geom_scatterpie(aes(x=longitude, y=latitude), 
+                  data=laby_euk_norm,cols=colnames(laby_euk_norm[,c(4:5)]), color=NA)+
   theme(legend.position = "bottom")+
   scale_fill_manual(values = c("#440154","#21918c"))
 
@@ -154,9 +152,8 @@ dev.off()
 png(file=paste0(wd,"/PLOTS/Q1/Laby_vs_stramenopiles_scatterpie_map.jpeg"),width=1536,height=802) 
 
 base_world+
-  geom_scatterpie(aes(x=longitude, y=latitude, r=log(norm)*2), 
-                  data=laby_stram_95,cols=colnames(laby_stram_95[,c(4:5)]), color=NA)+
-  geom_scatterpie_legend(log(laby_stram_95$norm)*2, x=-160, y=-55)+
+  geom_scatterpie(aes(x=longitude, y=latitude), 
+                  data=laby_stram_norm,cols=colnames(laby_stram_norm[,c(4:5)]), color=NA)+
   theme(legend.position = "bottom")+
   scale_fill_manual(values = c("#440154","#21918c"))
 
@@ -166,87 +163,32 @@ dev.off()
 png(file=paste0(wd,"/PLOTS/Q1/Laby_vs_sagenista_scatterpie_map.jpeg"),width=1536,height=802) 
 
 base_world+
-  geom_scatterpie(aes(x=longitude, y=latitude, r=log(norm)*2), 
-                  data=laby_sagen_95,cols=colnames(laby_sagen_95[,c(4:5)]), color=NA)+
-  geom_scatterpie_legend(log(laby_sagen_95$norm)*2, x=-160, y=-55)+
+  geom_scatterpie(aes(x=longitude, y=latitude), 
+                  data=laby_sagen_norm,cols=colnames(laby_sagen_norm[,c(4:5)]), color=NA)+
   theme(legend.position = "bottom")+
   scale_fill_manual(values = c("#440154","#21918c"))
 
 dev.off()
 
-################### ONLY THE CODES ABOVE ARE NORMALISED #########################
 
 # Part 2: Co-occurrence plots of Laby vs other protist classes
 
-## METHOD 1: Find the top 10 most abundant classes within the kingdom of eukaryotes and find the correlation
-
-# Preparing data: Find the top 10 most abundant classes within the kingdom of eukaryotes
-
-Euk_ordered<- asv_sample_wide %>%
-  group_by(latitude,longitude,class,n_reads) %>%
-  dplyr::summarise(total_count=n()*n_reads,.groups = 'drop')%>% # Find the total count for each location 
-  select( -n_reads) %>% group_by(latitude,longitude,class)%>%
-  dplyr::summarise(total_count = sum(total_count),.groups = 'drop')%>%# Merging values of the same location
-  group_by(class)%>%
-  dplyr::summarise(total_count = sum(total_count),.groups = 'drop')%>%# Merging values of the same class
-  arrange(desc(total_count))%>%
-  slice(1:10)%>%
-  as.data.frame()
-
-Laby_10_euk_name <- Euk_ordered %>% 
-  rows_insert(data.frame(class = "Labyrinthulomycetes", total_count = 1))
-
-# Preparing data: count total count of each class under each sampling occurrence (label+evi factors)
-# The number of variables added here seem useless
-
-laby_10_euk_label_wide <- asv_sample_wide %>%
-  filter(class %in% Laby_10_euk_name[,1])%>%
-  group_by(label,date,depth_level,depth,substrate,latitude,longitude,climate,temperature,salinity,ice_coverage,region,ecosystem,substrate_type,class,n_reads) %>% 
-  dplyr::summarise(total_count=n()*n_reads,.groups = 'drop')%>% # Find the total count for each label 
-  select( -n_reads) %>% group_by(label,date,depth_level,depth,substrate,latitude,longitude,climate,temperature,salinity,ice_coverage,region,ecosystem,substrate_type,class)%>%
-  dplyr::summarise(total_count = sum(total_count),.groups = 'drop')%>%# Merging values of the same class
-  spread(key = class, value = total_count)%>% # Convert to wide data
-  replace(is.na(.), 0) %>%
-  as.data.frame()
-
-# Plotting statistics from a paired correlation
-m1_cor_plot_laby_vs_10_euk = list()
-
-for (i in Euk_ordered[,1]) {
-  plot<- ggplot(data = laby_10_euk_label_wide, mapping = aes(x = log(Labyrinthulomycetes),
-                                                           y = log(laby_10_euk_label_wide[,i]))) +
-    geom_point( color = '#440154', size = 1) +
-    sm_statCorr(corr_method = 'spearman',
-                fit.params = list(linetype = 'dashed'),
-                borders = FALSE)+
-    ggtitle(paste("Correlation plot of ",i))+
-    labs(y= i, x = "Labyrinthulomycetes")+
-    theme(plot.title = element_text(hjust = 0.5))
-  m1_cor_plot_laby_vs_10_euk[[i]] <- ggplot_gtable(ggplot_build(plot))
-}
-
-do.call("grid.arrange", c(m1_cor_plot_laby_vs_10_euk, ncol=3))## display plot
-
-# Save plots to .jpeg. Makes a separate file for each plot.
-for (i in 1:10) {
-  png(file=paste0(wd,"/PLOTS/Q1/Method_1_Laby_vs_",Euk_ordered[i,1],"_corr_plot.jpeg"),width=1536,height=802) 
-  gridExtra::grid.arrange(m1_cor_plot_laby_vs_10_euk[[i]])
-  dev.off()
-}
-
-
 # METHOD 2: Find the correlation between classes within the kingdom of eukaryotes and laby and find the top 10 R scores
 
-# Preparing data: count total count of each class under each sampling occurrence (label+evi factors)
+# Preparing data: count total count of each class under each sampling occurrence 
 
-laby_all_euk_label_wide <- asv_sample_wide %>%
-  group_by(label,date,depth_level,depth,substrate,latitude,longitude,climate,temperature,salinity,ice_coverage,region,ecosystem,substrate_type,class,n_reads) %>% 
+laby_all_euk_fc_wide <- asv_sample_wide %>%
+  group_by(file_code,latitude,longitude,class,n_reads) %>% 
   dplyr::summarise(total_count=n()*n_reads,.groups = 'drop')%>% # Find the total count for each label 
-  select( -n_reads) %>% group_by(label,date,depth_level,depth,substrate,latitude,longitude,climate,temperature,salinity,ice_coverage,region,ecosystem,substrate_type,class)%>%
+  select( -n_reads) %>% group_by(file_code,latitude,longitude,class)%>%
   dplyr::summarise(total_count = sum(total_count),.groups = 'drop')%>%# Merging values of the same class
   spread(key = class, value = total_count)%>% # Convert to wide data
   replace(is.na(.), 0) %>%
+  mutate(sum = rowSums(select(., -c(1,2,3))))%>% # Add another row that counts the abundance of all 
   as.data.frame()
+
+# Normalize values
+laby_all_euk_fc_norm <- fun_rem_5(laby_all_euk_fc_wide) 
 
 # Loop to obtain r values
 cor_res_df <- data.frame() # Create empty list
@@ -255,7 +197,7 @@ all_class_name<- data.frame(name= unique(asv_sample_wide$class))%>%
   filter(!name == "Labyrinthulomycetes")
 
 for (i in all_class_name[,1]){
-  cor_res <- cor.test(log(laby_all_euk_label_wide$Labyrinthulomycetes), log(laby_all_euk_label_wide[,i]), method = "spearman",exact=FALSE,formula = ~ x + y,alternative = "two.sided")
+  cor_res <- cor.test(log(laby_all_euk_fc_norm$Labyrinthulomycetes), log(laby_all_euk_fc_norm[,i]), method = "spearman",exact=FALSE,formula = ~ x + y,alternative = "two.sided")
   cor_res_col<- cbind(class = i, r = round(cor_res$estimate[["rho"]],2),p_value = cor_res$p.value)
   cor_res_df <- rbind(cor_res_df,cor_res_col)
 }
@@ -268,7 +210,7 @@ cor_res_df <-cor_res_df%>%
 # Plotting statistics from a paired correlation
 m2_cor_plot_laby_vs_10_euk = list()
 for (i in cor_res_df[,1]) {
-  plot = ggplot( mapping = aes(x = log(laby_all_euk_label_wide$Labyrinthulomycetes), y = log(laby_all_euk_label_wide[,i]))) +
+  plot = ggplot( mapping = aes(x = log(laby_all_euk_fc_norm$Labyrinthulomycetes), y = log(laby_all_euk_fc_norm[,i]))) +
     geom_point( color = '#440154', size = 1) +
     sm_statCorr(corr_method = 'spearman',
                 fit.params = list(linetype = 'dashed'),
@@ -289,32 +231,24 @@ for (i in 1:10) {
   dev.off()
 }
 
+################# All parts above are normalized and running #####################
+
 # Part 3: Global abundance map of exclusively class Laby
 
 ## Plotting Global abundance map of exclusively class Laby
 
 ### Preparing laby data: abundance within class 
 laby_order_wide <- laby_asv_wide %>%
-  group_by(label,latitude,longitude,date,depth_level,substrate,climate,temperature,salinity,ice_coverage,ecosystem,order,n_reads) %>%
-  dplyr::summarise(total_count=n()*n_reads,.groups = 'drop')%>% # Find the total count for each label
-  select( -n_reads) %>% group_by(label,latitude,longitude,date,depth_level,substrate,climate,temperature,salinity,ice_coverage,ecosystem,order)%>%
+  group_by(file_code,latitude,longitude,order,n_reads) %>%
+  dplyr::summarise(total_count=n()*n_reads,.groups = 'drop')%>% # Find the total count for each file_code
+  select( -n_reads) %>% group_by(file_code,latitude,longitude,order)%>%
   dplyr::summarise(total_count = sum(total_count),.groups = 'drop')%>%# Merging values of the same order
   spread(key = order, value = total_count)%>% # Convert to wide data
   replace(is.na(.), 0) %>%
-  mutate(sum = rowSums(select(., 12:17)))%>% # Add another row that counts the abundance of all 
+  mutate(sum = rowSums(select(., -c(1,2,3))))%>% # Add another row that counts the abundance of all 
   as.data.frame()
 
-### Plotting scatterpie map of orders in class Laby
-png(file=paste0(wd,"/PLOTS/Q1/Laby_global_abun_scatterpie_map.jpeg"),width=1536,height=802) 
 
-base_world+
-  geom_scatterpie(aes(x=longitude, y=latitude, r=log(sum)/2), 
-                  data=laby_order_wide,cols=colnames(laby_order_wide[,c(12:(ncol(laby_order_wide)-1))]), color=NA)+
-  geom_scatterpie_legend(log(laby_order_wide$sum)/2, x=-160, y=-55)+
-  theme(legend.position = "bottom")+
-  scale_fill_viridis_d()
-
-dev.off()
 
 ## Cut continuous variable into discrete variable
 laby_order_wide$temperature<- as.factor(cut(laby_order_wide$temperature,breaks = seq(min(laby_order_wide$temperature, na.rm = TRUE), 
