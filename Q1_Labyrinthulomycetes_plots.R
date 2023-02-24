@@ -1,8 +1,6 @@
 ## Setup
 ###Load packages & plot setup
 
-# NOTE PLEASE CHANGE DIRECTORY ACCORDINGLY
-# BE AWARE OF WHERE THE CODE AND THE DATA IS STORED
 
 # Library is super messy but i will clean it up :")
 library(plyr) # data wrangling
@@ -21,6 +19,7 @@ library(gridExtra) # Extensions to the grid system in ggplot2
 library(treemapify) # Extensions to create treemaps in ggplot2
 library(viridis) # Colourblind friendly map
 library(rstudioapi)
+library(scales)
 
 # Create base map
 worldmap <- map_data ("world")# From the tidyverse package
@@ -39,7 +38,14 @@ base_world  <- ggplot()+
 ## Load dataset
 wd<- setwd(dirname(rstudioapi::getActiveDocumentContext()$path)) # set working directory
 
-asv_sample_wide<-read.table(file = paste0(wd,'/DATA/ALL/metapr2_ASVs_selected_abundance_Eukaryota.tsv'), sep = '\t', header = TRUE)
+asv_sample_wide<-read.csv(file = paste0(wd,'/DATA/ALL/woa_metapr2_ASVs_selected_abundance_Eukaryota.csv'))
+
+## Part 0: Removing unwanted data
+asv_sample_wide<-asv_sample_wide %>%
+  select(-c("NCBI_SRA_accession","NCBI_SRA_biosample","sample_code","substrate","DNA_RNA","fraction_name","sample_fixation","project","elevation","biome","vegetation","ice_coverage","dataset_code","dataset_name","gene","gene_region","organelle","ecosystem_climate","substrate_type","label"))%>%
+  filter(depth_level=='euphotic'|depth_level=='mesopelagic'|depth_level=='surface')%>%
+  as.data.frame()
+
 
 # Part 1: Global abundance map Laby vs other protists
 
@@ -65,7 +71,7 @@ fun_rem_5<- function(data) {
   # Normalize all columns
   laby_95$factor<- laby_95$sum/mean(laby_95$sum)
   
-  laby_norm<- cbind(laby_95[1:3],laby_95[,6:length(laby_95)-2]/laby_95$factor)
+  laby_norm<- cbind(laby_95[1:3],round(laby_95[,6:length(laby_95)-2]/laby_95$factor, digits = 0))
 
 
   return(laby_norm)
@@ -78,7 +84,8 @@ png(file=paste0(wd,"/PLOTS/Q1/Laby_global_abun_scatterpie_map.jpeg"),width=1536,
 
 base_world+
   geom_scatterpie(aes(x=longitude, y=latitude), 
-                  data=laby_order_norm,cols=colnames(laby_order_norm[,c(4:9)]), color=NA)+
+                  data=laby_order_norm,cols=colnames(laby_order_norm[,c(4:9)]), 
+                  color=NA,alpha=0.8,pie_scale = 0.75)+
   theme(legend.position = "bottom")+
   scale_fill_viridis_d()
 
@@ -142,7 +149,8 @@ png(file=paste0(wd,"/PLOTS/Q1/Laby_vs_eukaryotes_scatterpie_map.jpeg"),width=153
 
 base_world+
   geom_scatterpie(aes(x=longitude, y=latitude), 
-                  data=laby_euk_norm,cols=colnames(laby_euk_norm[,c(4:5)]), color=NA)+
+                  data=laby_euk_norm,cols=colnames(laby_euk_norm[,c(4:5)]), 
+                  color=NA,alpha=0.8,pie_scale = 0.75)+
   theme(legend.position = "bottom")+
   scale_fill_manual(values = c("#440154","#21918c"))
 
@@ -153,7 +161,8 @@ png(file=paste0(wd,"/PLOTS/Q1/Laby_vs_stramenopiles_scatterpie_map.jpeg"),width=
 
 base_world+
   geom_scatterpie(aes(x=longitude, y=latitude), 
-                  data=laby_stram_norm,cols=colnames(laby_stram_norm[,c(4:5)]), color=NA)+
+                  data=laby_stram_norm,cols=colnames(laby_stram_norm[,c(4:5)]), 
+                  color=NA,alpha=0.8,pie_scale = 0.75)+
   theme(legend.position = "bottom")+
   scale_fill_manual(values = c("#440154","#21918c"))
 
@@ -164,7 +173,8 @@ png(file=paste0(wd,"/PLOTS/Q1/Laby_vs_sagenista_scatterpie_map.jpeg"),width=1536
 
 base_world+
   geom_scatterpie(aes(x=longitude, y=latitude), 
-                  data=laby_sagen_norm,cols=colnames(laby_sagen_norm[,c(4:5)]), color=NA)+
+                  data=laby_sagen_norm,cols=colnames(laby_sagen_norm[,c(4:5)]), 
+                  color=NA,alpha=0.8,pie_scale = 0.75)+
   theme(legend.position = "bottom")+
   scale_fill_manual(values = c("#440154","#21918c"))
 
@@ -222,7 +232,11 @@ for (i in cor_res_df[,1]) {
   m2_cor_plot_laby_vs_10_euk[[i]] <- ggplot_gtable(ggplot_build(plot))
 }
 
+png(file=paste0(wd,"/PLOTS/Q1/top_10_cooccurance_plot.jpeg"),width=1536,height=802) 
+
 do.call("grid.arrange", c(m2_cor_plot_laby_vs_10_euk, ncol=3))## display plot
+
+dev.off()
 
 # Save plots to .jpeg. Makes a separate file for each plot.
 for (i in 1:10) {
@@ -233,30 +247,35 @@ for (i in 1:10) {
 
 ################# All parts above are normalized and running #####################
 
-# Part 3: Global abundance map of exclusively class Laby
+# Part 3: Distribution of order within laby according to environmental variables
 
-## Plotting Global abundance map of exclusively class Laby
-
-### Preparing laby data: abundance within class 
+# Preparing laby data with envi factors: Relative abundance within class
 laby_order_wide <- laby_asv_wide %>%
-  group_by(file_code,latitude,longitude,order,n_reads) %>%
-  dplyr::summarise(total_count=n()*n_reads,.groups = 'drop')%>% # Find the total count for each file_code
-  select( -n_reads) %>% group_by(file_code,latitude,longitude,order)%>%
-  dplyr::summarise(total_count = sum(total_count),.groups = 'drop')%>%# Merging values of the same order
+  group_by(file_code,latitude,longitude,dataset_id,date,depth_level,climate,temperature,salinity,ecosystem,ss_temperature,coalesce_salinity,order,n_reads) %>%
+  dplyr::summarise(total_count=n()*n_reads,.groups = 'drop')%>% # Find the total count for each location 
+  select( -n_reads) %>% group_by(file_code,latitude,longitude,dataset_id,date,depth_level,climate,temperature,salinity,ecosystem,ss_temperature,coalesce_salinity,order)%>%
+  dplyr::summarise(total_count = sum(total_count),.groups = 'drop')%>%# Merging values of the same location
   spread(key = order, value = total_count)%>% # Convert to wide data
-  replace(is.na(.), 0) %>%
-  mutate(sum = rowSums(select(., -c(1,2,3))))%>% # Add another row that counts the abundance of all 
+  mutate_at(c(13:18), ~replace_na(.,0))%>%
+  mutate(sum = rowSums(select(., -c(1:12))))%>% # Add another row that counts the abundance of all
   as.data.frame()
-
-
 
 ## Cut continuous variable into discrete variable
 laby_order_wide$temperature<- as.factor(cut(laby_order_wide$temperature,breaks = seq(min(laby_order_wide$temperature, na.rm = TRUE), 
                                                                                      max(laby_order_wide$temperature, na.rm = TRUE), 
                                                                                      by = 5)))
+
+laby_order_wide$ss_temperature<- as.factor(cut(laby_order_wide$ss_temperature,breaks = seq(min(laby_order_wide$ss_temperature, na.rm = TRUE), 
+                                                                                     max(laby_order_wide$ss_temperature, na.rm = TRUE), 
+                                                                                     by = 5)))
+
 laby_order_wide$salinity<- as.factor(cut(laby_order_wide$salinity,breaks = seq(min(laby_order_wide$salinity, na.rm = TRUE), 
                                                                                max(laby_order_wide$salinity, na.rm = TRUE), 
-                                                                               by = 5)))
+                                                                               by = 2)))
+
+laby_order_wide$coalesce_salinity<- as.factor(cut(laby_order_wide$coalesce_salinity,breaks = seq(min(laby_order_wide$coalesce_salinity, na.rm = TRUE), 
+                                                                               max(laby_order_wide$coalesce_salinity, na.rm = TRUE), 
+                                                                               by = 2)))
 
 laby_order_wide$latitude<- as.factor(cut(laby_order_wide$latitude,breaks = seq(min(-90, na.rm = TRUE), 
                                                                                max(90, na.rm = TRUE), 
@@ -265,28 +284,40 @@ laby_order_wide$latitude<- as.factor(cut(laby_order_wide$latitude,breaks = seq(m
 laby_order_wide$date<- months(as.Date(laby_order_wide$date))
 laby_order_wide$date = factor(laby_order_wide$date, levels=month.name)
 
+# Normalize data (i realise my previous function is too hard coded, will make a new version for this)
+p05 <- quantile(laby_order_wide$sum, 0.05)
+laby_95<- laby_order_wide[which(laby_order_wide$sum >= p05),]
+
+# Normalize all columns
+laby_95$factor<- laby_95$sum/mean(laby_95$sum)
+
+laby_norm<- cbind(laby_95[1:12],round(laby_95[,15:length(laby_95)-2]/laby_95$factor, digits = 0)) # Indexing is weird need to +2
+
 # Plotting Treemap of environmental factors affecting abundance in class Labyrinthulomycetes 
 
-envi_var<- data.frame(var = c("depth_level","substrate","climate","ecosystem","temperature","salinity","latitude","date"))
+envi_var<- data.frame(var = c("depth_level","climate","ecosystem","latitude","temperature","ss_temperature","salinity","coalesce_salinity"))
 
 for (i in envi_var[,1]){
   # Preparing data
-  laby_order_envi <- laby_order_wide %>%
-    gather(.,order, total_count,12:17 , factor_key=TRUE)%>% # Converting to long data
+  laby_order_envi <- laby_norm %>%
+    gather(.,order, total_count,13:18 , factor_key=TRUE)%>% # Converting to long data
     group_by(across(all_of(c(i,"order","total_count"))))%>%
     dplyr::summarise(total_count = sum(total_count),.groups = 'drop')%>% #Merging all data according to ecosystem
     group_by(across(all_of(c(i,"order")))) %>%
     dplyr::summarise(total_count = sum(total_count),.groups = 'drop')%>%# Merging values of the same order
     as.data.frame()
+
   
   # Treemap of laby
-  plot<- ggplot(laby_order_envi, aes(area = total_count, fill = order, label = order)) +
-    geom_treemap() +
-    geom_treemap_text(colour = "white",
-                      place = "centre",
-                      size = 15) +
+  plot<- ggplot(laby_order_envi, aes(fill = order, x= get(i),y=total_count)) +
+    geom_bar(position="fill", stat="identity")+
     scale_fill_viridis_d()+
-    facet_wrap(~ laby_order_envi[,1])
+    ylab("% of reads")+
+    scale_y_continuous(labels = percent)+
+    ggtitle(paste0("Bar plot of Labyrinthulomycetes distribution according to ",i)) +
+    theme(axis.title.y = element_blank(),
+          plot.title = element_text(hjust = 0.5,size=22))+
+    coord_flip()
   
   # Saving plots
   png(file=paste0(wd,"/PLOTS/Q1/Laby_envi_factor_",i,"_treemap.jpeg"),width=1536,height=802) 
