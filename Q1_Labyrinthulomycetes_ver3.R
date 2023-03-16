@@ -97,16 +97,16 @@ base_world +
   geom_jitter(data = dominant_merge, aes(x = longitude, 
                                          y = latitude,
                                          color=dominant_taxon,
-                                         size = n_reads_pct),
-              alpha=0.7)+
+                                         size = log(n_reads_pct)),
+              alpha=0.5)+
   geom_point(data=subset(dominant_merge, is.na(dominant_taxon)), 
              aes(x = longitude, 
                  y = latitude,
-                 shape='NA'), stroke=1.5, shape=4) +
+                 shape='NA'), stroke=1.5, shape=4,color = "red") +
   guides(size = guide_legend(reverse=T))+
   scale_size(range = c(.1, 10))+
   scale_color_viridis_d()+
-  labs(size="% of eukaryotes", color="Dominant_taxon")+
+  labs(size="logged % of eukaryotes", color="Dominant_taxon")+
   theme_minimal()+
   theme(panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
@@ -173,8 +173,16 @@ p2_plot<- function(variable){
   
   if (variable == "coalesce_salinity"){
     laby_order_sub <- laby_order_sub %>% 
-      mutate( coalesce_salinity = as.character(cut( coalesce_salinity, breaks = c(0,5,30,40) )))
+      mutate( coalesce_salinity = cut( coalesce_salinity, breaks = c(0,5,30,40) ))%>%
+      drop_na()
   }
+  
+  # Finding average laby % for each variable
+  f_labels <- laby_order_sub %>%
+    group_by(across(any_of(variable)))%>%
+    dplyr::summarise(avg_reads = mean(n_reads_pct),.groups = 'drop')%>% # merging values of the same file_code
+    drop_na()%>%
+    as.data.frame()
   
   ### Plotting treemap of orders and subgroup in class laby (surface)
   
@@ -189,8 +197,10 @@ p2_plot<- function(variable){
                                            alpha = 0.5, colour = "black", 
                                            min.size = 0) +
     theme_bw() +
+    title()
     scale_fill_viridis_d()+
     facet_wrap(~get(variable))+
+    coord_cartesian(xlim = c(50, 350), ylim = c(10, 35), clip = "off")+
     guides(fill = "none") 
   
   
@@ -402,9 +412,67 @@ site.scores_depth_2 <- cbind (site.scores_depth_2,
 plot_nmds(species.scores_depth_2,site.scores_depth_2,"depth_level",2)
 
 
-##################################
+##################### CODES BELOW ARE FOR ARCHIVE #####################
 
-# Preparing laby treemap data: Relative abundance within class and species
+# Find the correlation between classes within the kingdom of eukaryotes and laby and find the top 10 R scores
+
+# Preparing data: count total count of each class under each sampling occurrence 
+
+laby_all_euk_fc_wide <- asv_sample_wide %>%
+  group_by(file_code,latitude,longitude,class,n_reads) %>% 
+  dplyr::summarise(total_count=n()*n_reads,.groups = 'drop')%>% # Find the total count for each label 
+  select( -n_reads) %>% group_by(file_code,latitude,longitude,class)%>%
+  dplyr::summarise(total_count = sum(total_count),.groups = 'drop')%>%# Merging values of the same class
+  spread(key = class, value = total_count)%>% # Convert to wide data
+  replace(is.na(.), 0) %>%
+  mutate(sum = rowSums(select(., -c(1,2,3))))%>% # Add another row that counts the abundance of all 
+  as.data.frame()
+
+# Normalize values
+laby_all_euk_fc_norm <- fun_rem_5(laby_all_euk_fc_wide,4) 
+
+# Removing 0 values after logging
+laby_all_euk_fc_logged <- laby_all_euk_fc_norm
+laby_all_euk_fc_logged[, 4:length(laby_all_euk_fc_logged)] <- log(laby_all_euk_fc_norm[4:length(laby_all_euk_fc_logged)])
+laby_all_euk_fc_logged[laby_all_euk_fc_logged == -Inf] <- NA
+
+# Loop to obtain r values
+cor_res_df <- data.frame() # Create empty list
+
+all_class_name<- data.frame(name= unique(asv_sample_wide$class))%>% 
+  filter(!name == "Labyrinthulomycetes")
+
+for (i in all_class_name[,1]){
+  cor_res <- cor.test(log(laby_all_euk_fc_norm$Labyrinthulomycetes), log(laby_all_euk_fc_norm[,i]), method = "spearman",exact=FALSE,formula = ~ x + y,alternative = "two.sided")
+  cor_res_col<- cbind(class = i, r = round(cor_res$estimate[["rho"]],2),p_value = cor_res$p.value)
+  cor_res_df <- rbind(cor_res_df,cor_res_col)
+}
+
+# Select top 10 R values
+cor_res_df <-cor_res_df%>%
+  arrange(desc(r))%>%
+  slice(1:10)
+
+# Plotting statistics from a paired correlation
+m2_cor_plot_laby_vs_10_euk = list()
+for (i in cor_res_df[,1]) {
+  plot = ggplot( mapping = aes(x = laby_all_euk_fc_logged$Labyrinthulomycetes, y = laby_all_euk_fc_logged[,i])) +
+    geom_point( color = '#440154', size = 1) +
+    sm_statCorr(corr_method = 'spearman',
+                fit.params = list(linetype = 'dashed'),
+                borders = FALSE,
+                lm_method = lm)+
+    ggtitle(paste("Correlation plot of ",i))+
+    labs(y= i, x = "Labyrinthulomycetes")+
+    theme(plot.title = element_text(hjust = 0.5))
+  m2_cor_plot_laby_vs_10_euk[[i]] <- ggplot_gtable(ggplot_build(plot))
+}
+
+png(file=paste0(wd,"/PLOTS/Q1/top_10_cooccurance_plot.jpeg"),width=1536,height=802) 
+
+do.call("grid.arrange", c(m2_cor_plot_laby_vs_10_euk, ncol=3))## display plot
+
+dev.off()
 
 ## Part 2: Oceanic vs coastal Laby
 
