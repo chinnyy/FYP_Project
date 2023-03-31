@@ -3,9 +3,9 @@ Access the [WOA](https://www.ncei.noaa.gov/access/world-ocean-atlas-2023/) websi
 
 * Select the annual dataset in .csv format and in 1° grids
 
-## MetaPR~2~
+## MetaPR2
 
-Access the [MetaPR~2~](https://www.ncei.noaa.gov/access/world-ocean-atlas-2023/) website and download the metabarcoding data
+Access the [MetaPR2](https://www.ncei.noaa.gov/access/world-ocean-atlas-2023/) website and download the metabarcoding data
 
 * Change the following options under "select samples"
     + Ecosystems: Oceanic and Coastal
