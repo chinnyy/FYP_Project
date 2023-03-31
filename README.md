@@ -2,8 +2,8 @@
 
 
 
-/R : scripts to produce figures
+/R : Scripts to produce figures
 
-/data : data necessary for figures
+/data : Data necessary for data processing and to run the scripts
 
-/R_processing : script to process WOA data and sample information
+/R_processing : Script to process WOA data and sample information
