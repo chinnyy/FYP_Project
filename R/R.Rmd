@@ -1,0 +1,323 @@
+---
+title: "R"
+author: "Faith"
+date: "2023-04-1"
+output: 
+  html_document:
+    code_folding: show
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    theme: cosmo
+    collapsed: true
+    smooth_scroll: true
+  editor_options: 
+    markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message = FALSE, warning = FALSE) 
+# hides messages & warnings
+```
+
+In this page I will be plotting the necessary figures for the project. Functions from the file R.r will be extracted to aid in the plotting of figures. Data processing will be conducted before any figures are generated.
+
+
+## Setup
+
+### Load packages, plot setup and necessary functions
+
+```{r echo=TRUE}
+wd<- setwd(dirname(rstudioapi::getActiveDocumentContext()$path)) # set working directory
+
+# Navigate up to parent directory
+setwd("..")
+wd <- getwd()
+
+library(plyr) # data wrangling
+library(dplyr) # data wrangling
+library(tidyverse) # data wrangling and management
+library(ggplot2) # visualization
+library(vegan) # Ecological statistic tools 
+library(scatterpie) # Scatterpie plot
+library(smplot2) # Statistical data visualization that complements ggplot2
+library(gridExtra) # Extensions to the grid system in ggplot2
+library(treemapify) # Extensions to create treemaps in ggplot2
+library(viridis) # Colourblind friendly map
+library(rstudioapi) #Access the RStudio API 
+library(scales) # Customize axis and legend labels
+library(cowplot) # Supplement ggplot2
+library(ggallin) #Extra geoms and scales for ggplot2
+
+# Create base map
+worldmap <- map_data ("world")# From the tidyverse package
+
+base_world  <- ggplot()+ 
+  coord_fixed() +
+  xlab("") + ylab("") + 
+  geom_polygon(data=worldmap, aes(x=long, y=lat, group=group), 
+               fill="grey80")+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), 
+        panel.background = element_rect(fill = 'white', colour = 'white'), 
+        axis.line = element_line(colour = "white"), #legend.position="none",
+        axis.ticks=element_blank(), axis.text.x=element_blank(),
+        axis.text.y=element_blank())
+
+# Source for functions 
+source("R/R.R")
+```
+
+## Part 0: Loading data sets and data processing
+Since the data set from MetaPR2 is not updated, using the updated samples_edit.csv file I will be merging information to update the MetaPR2 dataset 
+
+### Loading data sets
+```{r echo=TRUE}
+
+asv_sample_raw<-read_tsv(file = paste0(wd,'/DATA/METAPR2/woa_metapr2_ASVs_selected_abundance_Eukaryota.tsv')) # Change the name of your MetaPR2 file accordingly 
+
+sample_info<- read.csv(file = paste0(wd,'/DATA/METAPR2/samples_edit.csv'))
+```
+
+### Updating MetaPR2 data
+```{r echo=TRUE}
+# Remove the non-mircobial eukaryotes 
+asv_sample_raw<-asv_sample_raw[!(asv_sample_raw$division == "Metazoa" | asv_sample_raw$division == "Fungi"),]
+
+
+# Merging information from updated samples data set to the asv data set by matching file_code
+
+asv_sample<- asv_sample_raw %>%
+  dplyr::select(-c("climate"))%>%
+  merge(sample_info[,c("file_code","climate","ss_temperature","salinity_woa","coalesce_salinity")],by=c('file_code'),all.x = T)
+```
+
+
+### Data processing
+```{r echo=TRUE}
+# Reassign depth level to avoid overlap
+asv_sample<-asv_sample %>%
+  mutate(depth_level = case_when((depth >=  0 & depth <= 10) ~ "surface",
+                                 (depth >  10 & depth <= 200 ) ~ "euphotic",
+                                 (depth >  200) ~ "pelagic",
+                                 TRUE ~ depth_level))
+sample_info<-sample_info %>%
+  mutate(depth_level = case_when((depth >=  0 & depth <= 10) ~ "surface",
+                                 (depth >  10 & depth <= 200 ) ~ "euphotic",
+                                 (depth >  200) ~ "pelagic",
+                                 TRUE ~ depth_level))
+
+# Correct dataset ID 385 as it was mistakenly classified as oceanic
+asv_sample<- asv_sample %>%
+  mutate(ecosystem = case_when((dataset_id ==  385) ~ "coastal",
+                                 TRUE ~ ecosystem))
+
+sample_info<- sample_info %>%
+  mutate(ecosystem = case_when((dataset_id ==  385) ~ "coastal",
+                               TRUE ~ ecosystem))
+```
+
+
+## Part 1: Distribution of laby (surface)
+For global distribution plots, only surface communities will be plotted and time series data will be removed to avoid overlapping at one point
+
+```{r echo=TRUE}
+# Create file directory for plots from part 1
+dir.create(paste0(wd,'/PLOTS/R'))
+dir.create(paste0(wd,'/PLOTS/R/P1'))
+
+# Remove unessary dataset
+asv_sample_surface_nts<-asv_sample %>%
+  subset(depth_level == 'surface')%>%
+  subset(dataset_id!="16" & dataset_id!="18"& dataset_id!="19"& dataset_id!="20"& dataset_id!="28"& dataset_id!="29"& dataset_id!="36"& dataset_id!="49"& dataset_id!="384")
+```
+
+
+### Preparing Presence/absence data
+```{r echo=TRUE}
+laby_PAD <- asv_sample_surface_nts %>%
+  group_by(file_code, latitude, longitude, class, n_reads) %>%
+  dplyr::summarise(total_count = n() * n_reads, .groups = 'drop') %>% # Find the total count for each location
+  dplyr::select(-n_reads) %>% group_by(file_code, latitude, longitude, class) %>%
+  dplyr::summarise(total_count = sum(total_count), .groups = 'drop') %>% # Merging values of the same location
+  spread(key = class, value = total_count) %>% # Convert to wide data
+  dplyr::select(file_code, latitude, longitude,Labyrinthulomycetes)%>%
+  mutate(P_A = case_when((Labyrinthulomycetes > 0) ~ "present",
+                         is.na(Labyrinthulomycetes) ~ "absent"))%>%
+  as.data.frame()
+```
+
+### Prepare data for Laby dominance map 
+
+```{r echo=TRUE}
+
+# Filter for class laby 
+laby_asv_sample<- filter(asv_sample,class == "Labyrinthulomycetes")
+laby_asv_sample_surface_nts <- filter(asv_sample_surface_nts,class == "Labyrinthulomycetes")
+
+# Find the dominant taxon in each sample
+dominant_taxon <- laby_asv_sample_surface_nts %>%
+  group_by(file_code, order,n_reads_pct) %>%
+  arrange(file_code, desc(n_reads_pct)) %>%
+  group_by(file_code) %>%
+  dplyr::slice(1) %>%
+  mutate(dominant_taxon = .data[["order"]]) %>%
+  dplyr::select(file_code,latitude,longitude ,dominant_taxon,n_reads_pct)
+
+# Merge information on P/A and dominance
+dominant_merge <- laby_PAD %>%
+  merge(dominant_taxon[,c("file_code","dominant_taxon","n_reads_pct")], 
+        by=c('file_code'),all.x = T)
+
+```
+
+### Plot individual components of the map
+
+Separate plots will be created and merged together on a separate software Affinity Designer
+
+#### Plotting main map
+```{r echo=TRUE}
+# Creating colour palette for the 6 orders
+vir_order<- c("Amphifilida" = "#440154", "Amphitremida" = "#414487","Labyrinthulida" = "#2a788e","Labyrinthulomycetes_X" = "#22a884","Oblongichytrida" = "#7ad151","Thraustochytrida" = "#fde725")
+
+# Create the main map
+main_map<- base_world +
+  geom_point(data=subset(dominant_merge, is.na(dominant_taxon)), 
+             aes(x = longitude, 
+                 y = latitude,
+                 shape='NA'), stroke=0.8, shape=4,color = "red") +
+  geom_jitter(data = dominant_merge, aes(x = longitude, 
+                                         y = latitude,
+                                         color=dominant_taxon,
+                                         size = n_reads_pct*2),
+              alpha=0.6)+
+  guides(size = guide_legend(reverse=T))+
+  scale_size_continuous(range  = c(0.1, 10), 
+                        limits = c(0, 40), 
+                        breaks = c(1, 5, 20),
+                        trans=pseudolog10_trans)+
+  scale_color_manual(values=vir_order)+
+  labs(size="% of microbial \n eukaryotes", color="Dominant taxon")+
+  theme_minimal()+
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.text.x=element_blank(),
+        axis.text.y=element_blank(),
+        legend.box.background = element_rect(colour = NA))
+
+# Add boxes to the main map indicating areas to be zoomed in
+main_map_plot<- main_map +
+  geom_polygon(aes(x=c(-7,-7,36,36),y=c(30,60,60,30)),
+               fill = "NA", colour = "black",linewidth = 0.4)+
+  geom_polygon(aes(x=c(-98,-98,-55,-55),y=c(13,48,48,13)),
+               fill = "NA", colour = "black",linewidth = 0.4)+
+  geom_polygon(aes(x=c(164,164,185,185),y=c(-60,-30,-30,-60)),
+               fill = "NA", colour = "black",linewidth = 0.4)+
+  geom_polygon(aes(x=c(-80,-80,-50,-50),y=c(-70,-60,-60,-70)),
+               fill = "NA", colour = "black",linewidth = 0.4)
+
+
+ggsave(filename=paste0(wd,"/PLOTS/R/P1/main_map.pdf"),plot=main_map_plot,width=40,height=19,units=c("cm"),bg="white")
+```
+
+
+#### Plotting zoomed in sections of map
+```{r echo=TRUE}
+# Using these coordinates, create small individual boxes of maps and save them individually 
+
+# Create a dataframe to store the plots coordinates
+cord_df<- data.frame(plot_num = c("A","B","C","D"),
+                     x1 = c(-7,-98,164,-80),
+                     x2 = c(36,-55,185,-50),
+                     y1 = c(30,13,-60,-70),
+                     y2 = c(60,48,-30,-60))
+
+# Plot the zoomed in sections and save them
+for (i in 1:nrow(cord_df)){
+  
+  small_p<- main_map+
+    coord_cartesian(xlim =c(cord_df[i,"x1"], cord_df[i,"x2"]), ylim = c(cord_df[i,"y1"], cord_df[i,"y2"]))+
+    theme(legend.position="none",
+          panel.border = element_rect(colour = "black", fill=NA, size=0.3))
+  
+  ggsave(filename=paste0(wd,"/PLOTS/R/P1/small_plot",cord_df[i,"plot_num"],".pdf"),plot = small_p,dpi=300,bg="white")
+}
+```
+
+## Part 2: Treemap+ scatterpie maps of each ecosystem variable
+Using the function p2_plot, I will be able to plot all the individual components of the Tree map and scatterpie map required and save them. The figures will later be assembled in Affinity Designer. The function of p2_plot also gives us an output that is a list of information about the composition of different Labyrinthulomycetes orders for the different input ecosystems.
+
+### Plot Treemap+ scatterpie maps
+```{r echo=TRUE}
+# Using the function, plot the different treescatterpie map according to the variables 
+variable_df <- data.frame(variable=c("ecosystem","depth_level","climate"))
+
+f_labels_combi <- list() #  New dataframe to store information of plots
+
+for (i in variable_df[,1]){
+  f_lab<- p2_plot(i)
+  f_labels_combi[[i]] <- f_lab # add it to your list
+}
+
+```
+
+
+### Plot depth map 
+Since a map will not be meaningful in studying the vertical composition of the different Labyrinthulomycetes orders. A separate depth plot will be created to illustrate the changes in community structure in relation to depth.
+```{r echo=TRUE}
+# Prepare data for depth plot
+laby_depth<- laby_asv_sample %>%  # for depth_level
+  mutate(across(depth_level, factor, levels=c("surface","euphotic","pelagic")))%>%
+  filter(ecosystem == "oceanic") %>% # Filter for laby and oceanic samples
+  mutate(depth = fct_rev(cut(depth, breaks = c(0, 2.5, 5, 7.5, 10, 50, 100, 150,200, 1000,2000,3000,9000))))%>%
+  drop_na(depth)%>%
+  group_by(depth,order) %>%
+  summarize(n_reads_pct = sum(n_reads_pct)) %>%
+  group_by(depth) %>% 
+  mutate(n_reads_pct = n_reads_pct/sum(n_reads_pct)*100)
+
+# Plotting out depth plot 
+depth_plot<- ggplot(laby_depth)+
+  geom_col(aes (x= depth,
+                y=n_reads_pct, 
+                fill=order)) +
+  scale_fill_viridis_d()+
+  theme_minimal()+
+  theme(panel.border = element_blank(), 
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        legend.position = "none")+
+  scale_y_continuous(breaks = seq(0,100,20)) +
+  ylab("% of reads") + xlab("Depth (m)") +
+  coord_flip()
+
+ggsave(filename=paste0(wd,"/PLOTS/R/P2/Laby_depth_plot.pdf"),plot=depth_plot,width=40,height=40,units=c("cm"),bg="white")
+```
+
+## Part 3: NMDS 
+NMDs ordination plots will be used to illustrate the clustering of samples belonging to different variables. 
+
+In this part, I will be using 2 functions, fun_norm to normalise data and nmds_plot to plot NMDs plots according to the ecosystem variables.
+
+### Using the function, plot the NMDs plots according to the variables 
+```{r echo=TRUE}
+nmds_variable_df <- data.frame(variable=c("surface","depth"))
+
+for (i in nmds_variable_df[,1]){
+  nmds_plot(i,laby_asv_sample)
+}
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+

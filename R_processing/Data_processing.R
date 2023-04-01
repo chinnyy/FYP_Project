@@ -141,7 +141,7 @@ base_world +
         axis.text.x=element_blank(),
         axis.text.y=element_blank())
 
-ggsave(filename=paste0(wd,"/PLOTS/R_processing/Climate_type_map.png"),width=40,height=19,units=c("cm"),bg="white")
+ggsave(filename=paste0(wd,"/PLOTS/R_processing/Climate_type_map.pdf"),width=40,height=19,units=c("cm"),bg="white")
 
 # To edit salinity data
 
