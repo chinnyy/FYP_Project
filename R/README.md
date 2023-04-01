@@ -3,6 +3,7 @@ Run this script after downloading the necessary data into the following folder a
 
 # Files 
 R_function.r: Contains functions required to generate data and plots
+
 R.rmd: Rmarkdown file that runs all the functions
 
 ## Dataset
