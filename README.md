@@ -4,6 +4,8 @@
 
 /R : Scripts to produce figures
 
-/data : Data necessary for data processing and to run the scripts
+/DATA : Data necessary for data processing and to run the scripts
 
 /R_processing : Script to process WOA data and sample information
+
+/PLOTS: Plots from R and R_processing stored here 
