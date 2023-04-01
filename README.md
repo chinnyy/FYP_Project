@@ -8,4 +8,4 @@
 
 /R_processing : Script to process WOA data and sample information
 
-/PLOTS: Raw plots from R and R_processing stored here 
+/PLOTS: Raw and finalised plots from R and R_processing stored here 
