@@ -1839,29 +1839,47 @@ structure in relation to depth.</p>
 laby_depth&lt;- laby_asv_sample %&gt;%  # for depth_level
   mutate(across(depth_level, factor, levels=c(&quot;surface&quot;,&quot;euphotic&quot;,&quot;pelagic&quot;)))%&gt;%
   filter(ecosystem == &quot;oceanic&quot;) %&gt;% # Filter for laby and oceanic samples
-  mutate(depth = fct_rev(cut(depth, breaks = c(0, 2.5, 5, 7.5, 10, 50, 100, 150,200, 1000,2000,3000,9000))))%&gt;%
+  mutate(depth = fct_rev(cut(depth, breaks = c(0, 10, 50, 100, 150,200, 1000,2000,3000,9000))))%&gt;%
   drop_na(depth)%&gt;%
   group_by(depth,order) %&gt;%
   summarize(n_reads_pct = sum(n_reads_pct)) %&gt;%
   group_by(depth) %&gt;% 
   mutate(n_reads_pct = n_reads_pct/sum(n_reads_pct)*100)
 
+# To count the number of samples in each break
+depth_samples &lt;- laby_asv_sample %&gt;% 
+  mutate(across(depth_level, factor, levels=c(&quot;surface&quot;,&quot;euphotic&quot;,&quot;pelagic&quot;)))%&gt;%
+  filter(ecosystem == &quot;oceanic&quot;) %&gt;% # Filter for laby and oceanic samples
+  mutate(depth = fct_rev(cut(depth, breaks = c(0, 10, 50, 100, 150,200, 1000,2000,3000,9000))))%&gt;%
+  drop_na(depth)%&gt;%
+  select(file_code, depth) %&gt;% 
+  distinct() %&gt;% 
+  group_by(depth) %&gt;% 
+  count() 
+
 # Plotting out depth plot 
 depth_plot&lt;- ggplot(laby_depth)+
   geom_col(aes (x= depth,
                 y=n_reads_pct, 
                 fill=order)) +
+  geom_text(data=depth_samples,
+            aes(y = 100,
+                x = depth,
+                label = glue::glue(&quot;n = {n}&quot;)),
+            nudge_y = 10) +
   scale_fill_viridis_d()+
   theme_minimal()+
   theme(panel.border = element_blank(), 
         panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
-        legend.position = &quot;none&quot;)+
+        legend.position = &quot;none&quot;,
+        text = element_text(size = 30))+
   scale_y_continuous(breaks = seq(0,100,20)) +
   ylab(&quot;% of reads&quot;) + xlab(&quot;Depth (m)&quot;) +
+  update_geom_defaults(&quot;text&quot;, list(size = 9))+
   coord_flip()
 
-ggsave(filename=paste0(wd,&quot;/PLOTS/R/P2/Laby_depth_plot.pdf&quot;),plot=depth_plot,width=40,height=40,units=c(&quot;cm&quot;),bg=&quot;white&quot;)</code></pre>
+ggsave(filename=paste0(wd,&quot;/PLOTS/R/P2/Laby_depth_plot.pdf&quot;),plot=depth_plot,width=30,height=40,units=c(&quot;cm&quot;),bg=&quot;white&quot;)</code></pre>
 </div>
 </div>
 <div id="part-3-nmds" class="section level2">
