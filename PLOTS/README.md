@@ -1,4 +1,4 @@
 # Plots generated from rmd files
-Individual components of a figure are plotted using the r application and later assembled together on Affinity Designer.
+/R and R_processing: Contains individual components of a figure generated using the r application 
 
 /R_final: Contains the finalized figures compiled using Affinity Designer 
